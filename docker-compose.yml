@@ -1,0 +1,31 @@
+version: '3.9'
+services:
+  web:
+    container_name: web
+    hostname: web
+    build:
+      dockerfile: ./web.Dockerfile
+    command: /bin/bash
+    environment:
+      - OAUTH_CODE
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - $HOME/.aws:/root/.aws
+    tty: true
+    depends_on:
+      - "db"
+  db:
+    container_name: db
+    hostname: db
+    image: biarms/mysql:5.7.30
+    environment:
+      MYSQL_DATABASE: 'db'
+      MYSQL_USER: 'user'
+      MYSQL_PASSWORD: 'password'
+      MYSQL_ROOT_PASSWORD: 'password'
+    expose:
+      - "3306"
+    volumes:
+      - ./data:/var/lib/mysql
