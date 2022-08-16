@@ -1,12 +1,12 @@
 <img src="https://www.docker.com/wp-content/uploads/2022/03/Moby-logo.png" width=200>
 
 # Code<span>.org Docker Dev Environment
-The Code<span>.org Docker dev environment enables you to run and develop on the Code<span>.org platform using Docker containers.
+The Code<span>.org Docker dev environment enables you to develop on the Code<span>.org platform using Docker containers.
 
-Doing so offers many advantages over setting up a development environment directly on your laptop. These include:
+Doing so offers many advantages over a development environment directly on your laptop. These include:
 
 - No need to worry about managing dependencies (e.g., setting up rbenv, managing versions of Ruby, or removing/installing Ruby gems).
-- Rebuilding your development environment is scripted, which makes it easy to test new changes, such as a new version of a Ruby gem or even a new version of MySQL. 
+- Rebuilding your development environment is scripted, which makes it easy to test new changes and roll them back, such as a new version of a Ruby gem or even a new version of MySQL. 
 - It's easier to have multiple versions of the Code<span>.org dev environment and database on the same machine.
 - A docker-based development environment works better for Code<span>.org volunteers, who may not want to install a bunch of our dependencies directly on their employer-provided machines.
 - The docker-based environment uses Ubuntu, which mimics our production environment (and reduces the chance of things working on your laptop, but not on our production servers).
@@ -40,7 +40,7 @@ To get everything setup, follow these five steps:
 	- ```git clone git@github.com:code-dot-org/code-dot-org.git src```
 - Edit src/Gemfile:
 	- Remove mini_racer gem (I really don't think we use this any more)
-	- Update unf_ext to 0.0.8 (and also update Gemfile.lock unf_ext from 0.0.7.2)
+	- Update unf_ext from 0.0.0.72 to 0.0.8 (and also update Gemfile.lock unf_ext from 0.0.7.2 to 0.0.8)
 	- Add gem 'tzinfo-data' (this is required for db seeding in containers)
 - Edit src/config/development.yml.erb
 	- Set db_writer to ```'mysql://root:password@db/'``` (this points the development environment to the db container vs. the local machine).
@@ -49,7 +49,7 @@ To get everything setup, follow these five steps:
 - Run the containers:
 	- ```docker compose up```
 
-You'll then need to open a new terminal window/tab to continue with the rest of the setup.
+If everything starts fine, you should see ```mysqld: ready for connections.``` You'll then need to open a new terminal window/tab to continue with the rest of the setup.
 
 ## Step 2: Configure AWS credentials
 - Ensure $HOME/.aws on your host laptop contains valid AWS credentials. You probably already have this setup, but if you don't, you can find instructions [here](https://docs.google.com/document/d/1dDfEOhyyNYI2zIv4LI--ErJj6OVEJopFLqPxcI0RXOA/edit#heading=h.nbv3dv2smmks).
@@ -75,14 +75,14 @@ You'll then need to open a new terminal window/tab to continue with the rest of 
 	- ```bundle exec rake install```
 
 ## Step 4: Build the web package
-- Connect to the web container:
+- Connect to the web container (if not already connected):
 	- ```docker exec -ti web /bin/bash```
 - Rake build:
 	- ```cd /app/src```
 	- ```bundle exec rake build```
 
 ## Step 5: Run the server
-- Connect to the web container:
+- Connect to the web container (if not already connected):
 	- ```docker exec -ti web /bin/bash```
 - Run the dashboard server script:
 	- ```cd /app/src```
@@ -114,6 +114,10 @@ ports:
 
 No, all data resides on the host laptop and is mounted by the containers when they start. Source is kept in the ./src folder. MySQL database files are kept in the ./data folder.
 
+#### Q: Does my IDE run in a container?
+
+No, your IDE runs on your host laptop as normal.
+
 #### Q: Where do I set my IDE to point to?
 
 Use your preferred IDE to open the ./src folder - just as you would if you were developing on your host laptop. As this is a mounted volume in the web container, any changes are reflected immediately.
@@ -138,6 +142,12 @@ Once you are done, you can either press CTRL-C in the original window to stop th
 
 ```
 docker compose down
+```
+
+If you don't want to restart the containers, you can also use pause and unpause:
+
+```
+docker compose pause|unpause
 ```
 
 #### Q: How do I rebuild my database?
