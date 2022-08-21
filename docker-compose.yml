@@ -6,16 +6,16 @@ services:
     build:
       dockerfile: ./web.Dockerfile
     command: /bin/bash
-    environment:
-      - OAUTH_CODE
     ports:
       - "3000:3000"
     volumes:
       - .:/app
-      - $HOME/.aws:/root/.aws
+      - $HOME/.aws:/home/cdodev/.aws
     tty: true
     depends_on:
       - "db"
+    security_opt:
+      - seccomp=chrome.json
   db:
     container_name: db
     hostname: db
