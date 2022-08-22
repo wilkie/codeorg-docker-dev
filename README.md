@@ -30,7 +30,7 @@ The only pre-requisite you need on your host laptop is Docker desktop.  If you d
 
 Note: This repo has been tested using Docker version 20.10.9.
 
-To get everything setup, follow these five steps:
+To get everything setup, follow these three steps:
 
 ## Step 1: Build and run the containers
 - Open a terminal and clone this repo:
@@ -59,35 +59,21 @@ If everything starts fine, you should see ```mysqld: ready for connections.``` Y
 	- ```cd /app/src```
 	- ```bin/aws_access```
 	- When prompted, copy and paste the URL into a separate browser window and copy the returned OAUTH_CODE to the clipboard.
-- Stop the containers:
-	- Return to the first terminal window/tab and hit CTRL-C to shutdown the web and db containers.
-- Within this window/tab, set the OAUTH_CODE on the host:
+- Set the OAUTH_CODE as an environment var:
 	- ```export OAUTH_CODE=copied value```
-	- (If you don't want to repeat this when you close the terminal window, add this to your ~/.bashrc or other terminal profile script.)
-- Restart the containers:
-	- ```docker compose up```
+	- (If you close the terminal window or restart the containers, you'll need to repeat this)
 
-## Step 3: Seed the db
-- Connect to the web container:
-	- ```docker exec -ti web /bin/bash```
-- Rake install:
-	- ```cd /app/src```
+## Step 3: Seed the db, build, and run the server
+- From the ```/app/src``` directory, rake install:
 	- ```bundle exec rake install```
-
-## Step 4: Build the web package
-- Connect to the web container (if not already connected):
-	- ```docker exec -ti web /bin/bash```
 - Rake build:
-	- ```cd /app/src```
 	- ```bundle exec rake build```
-
-## Step 5: Run the server
-- Connect to the web container (if not already connected):
-	- ```docker exec -ti web /bin/bash```
 - Run the dashboard server script:
-	- ```cd /app/src```
 	- ```bin/dashboard-server```
 - Open a web browser and browse to http://localhost-studio.code.org:3000
+
+## Optional: Running Tests
+TBD
 
 ## Optional: Exposing MySQL (on port 3306) to the host
 If you have a MySQL client on your host laptop (e.g., JetBrains Datagrip or SQLPro), you can also connect directly to the MySQL database running in the db container.
@@ -108,6 +94,9 @@ ports:
   - "3307:3306"
 ```
 
+## Optional: Debugging using RubyMine
+TBD
+
 ## FAQ
 
 #### Q: If I delete the containers, does it delete any data?
@@ -124,27 +113,11 @@ Use your preferred IDE to open the ./src folder - just as you would if you were 
 
 #### Q: Do I need to go through all these steps every time?
 
-No, once the containers are created, you are all set! Just start the containers:
+No, once the containers are created, you are all set! If you restart the containers, you'll need to generate and set a new OAUTH_CODE and restart the dashboard server.
 
-```
-docker compose up
-```
+#### Q: Can I pause containers?
 
-And in another terminal window/tab, run the dashboard-server script.
-
-```
-docker exec -ti web /bin/bash
-cd /app/src
-bin/dashboard-server
-```
-
-Once you are done, you can either press CTRL-C in the original window to stop the containers or use:
-
-```
-docker compose down
-```
-
-If you don't want to restart the containers, you can also use pause and unpause:
+Yes, you can use pause and unpause commands with Docker compose:
 
 ```
 docker compose pause|unpause
