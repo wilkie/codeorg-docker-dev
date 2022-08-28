@@ -5,9 +5,11 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && apt-get -y install --no-install-recommends autoconf bison build-essential libssl-dev libyaml-dev libreadline6-dev zlib1g-dev libncurses5-dev libffi-dev libgdbm5 libgdbm-dev git chromium-browser parallel
 
 # Set the non-root user for the container and switch
+ARG UID
+ARG GID
 RUN apt-get -y install sudo
-RUN groupadd -g 999 cdodev \
-    && useradd -r -u 999 -g cdodev --shell /bin/bash --create-home cdodev \
+RUN groupadd -g ${GID} cdodev \
+    && useradd -r -u ${UID} -g cdodev --shell /bin/bash --create-home cdodev \
     && echo 'cdodev ALL=NOPASSWD: ALL' >> /etc/sudoers \
     && chown -R cdodev /usr/local
 USER cdodev
@@ -53,6 +55,7 @@ RUN sudo mkdir -p /app/src
 COPY src/Gemfile /app/src/.
 COPY src/Gemfile.lock /app/src/.
 COPY src/.ruby-version /app/src/.
+RUN sudo chown -R cdodev /app
 RUN cd /app/src \
     && eval "$(rbenv init -)" \
     && gem install bundler -v 1.17.3 \

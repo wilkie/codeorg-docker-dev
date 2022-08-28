@@ -5,6 +5,9 @@ services:
     hostname: web
     build:
       dockerfile: ./web.Dockerfile
+      args:
+        UID: ${FIXUID:-1000}
+        GID: ${FIXGID:-1000}
     command: /bin/bash
     ports:
       - "3000:3000"

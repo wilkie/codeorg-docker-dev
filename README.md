@@ -26,7 +26,9 @@ Docker networking provides a connection between the two containers. The db conta
 <img src="./containers.png" width=400>
 
 ## Pre-requisite: Docker Desktop
-The only pre-requisite you need on your host laptop is Docker desktop.  If you don't have it already installed and running, you can download it [here](https://www.docker.com/products/docker-desktop/).
+The only pre-requisite you need on your host laptop is Docker desktop.  If you don't have it already installed and running, you can download it [here](https://www.docker.com/products/docker-desktop/). 
+
+If you are on a Linux machine, you can follow the instructions [here](https://docs.docker.com/desktop/install/linux-install/). Also, ensure you can run Docker as a non-root user, following [these instructions](https://docs.docker.com/engine/install/linux-postinstall/).
 
 Note: This repo has been tested using Docker version 20.10.9.
 
@@ -40,12 +42,15 @@ To get everything setup, follow these three steps:
 	- ```git clone git@github.com:code-dot-org/code-dot-org.git src```
 - Edit src/Gemfile:
 	- Remove mini_racer gem (I really don't think we use this any more)
-	- Update unf_ext from 0.0.0.72 to 0.0.8 (and also update Gemfile.lock unf_ext from 0.0.7.2 to 0.0.8)
+	- Update unf_ext from 0.0.0.72 to 0.0.8
 	- Add gem 'tzinfo-data' (this is required for db seeding in containers)
+- Edit src/Gemfile.lock:
+    - Update unf_ext from 0.0.7.2 to 0.0.8
 - Edit src/config/development.yml.erb
 	- Set db_writer to ```'mysql://root:password@db/'``` (this points the development environment to the db container vs. the local machine).
 - Build the containers:
-	- ```docker compose build```
+    - macOS host: ```docker compose build```
+	- Linux host: ```FIXUID=$(id -u) FIXGID=$(id -g) docker compose build```
 - Run the containers:
 	- ```docker compose up```
 
@@ -54,7 +59,7 @@ If everything starts fine, you should see ```mysqld: ready for connections.``` Y
 ## Step 2: Configure AWS credentials
 - Ensure $HOME/.aws on your host laptop contains valid AWS credentials. You probably already have this setup, but if you don't, you can find instructions [here](https://docs.google.com/document/d/1dDfEOhyyNYI2zIv4LI--ErJj6OVEJopFLqPxcI0RXOA/edit#heading=h.nbv3dv2smmks).
 - Connect to the web container:
-	- ```docker exec -ti web /bin/bash```
+	- ```docker exec -ti web bash```
 - Run the aws_access script:
 	- ```cd /app/src```
 	- ```bin/aws_access```
@@ -94,7 +99,10 @@ ports:
   - "3307:3306"
 ```
 
-## Optional: Debugging using RubyMine
+## Optional: Debugging Rails server using RubyMine
+TBD
+
+## Optional: Debugging web using WebStorm
 TBD
 
 ## FAQ
@@ -132,7 +140,7 @@ All of the MySQL database files are held in the ./data directory. To rebuild the
 Edit src/Gemfile, connect to the Web container, and run bundle install:
 
 ```
-docker exec -ti web /bin/bash
+docker exec -ti web bash
 cd /app/src
 bundle install
 ```
