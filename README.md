@@ -38,7 +38,7 @@ To get everything setup, follow these three steps:
 - Open a terminal and clone this repo:
 	- ```git clone git@github.com:simonguest/codeorg-docker-dev.git```
 - Within this directory, git clone the Code<span>.org repository as a sub-directory called src:
-	- ```cd codeorg-docker-dev.git```
+	- ```cd codeorg-docker-dev```
 	- ```git clone git@github.com:code-dot-org/code-dot-org.git src```
 - Edit src/Gemfile:
 	- Remove mini_racer gem (I really don't think we use this any more)
