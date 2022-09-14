@@ -21,7 +21,8 @@ RUN sudo apt-get -y install rbenv \
 
 # Install Ruby 2.6.6 and Bundler 1.17.3
 RUN rbenv install 2.6.6 \
-    && echo -n '\n# rbenv init\neval "$(rbenv init -)"\n' >> ~/.bashrc
+    && echo -n '\n# rbenv init\neval "$(rbenv init -)"\n' >> ~/.bashrc \
+    && rbenv global 2.6.6
 
 # Install Node 14.17.1
 RUN sudo apt-get -y install nodejs npm \
@@ -50,6 +51,9 @@ RUN echo -n '\n# AWS Profile\nexport AWS_PROFILE=cdo\n' >> ~/.bashrc
 # Add CHROME_BIN env var to bashrc
 RUN echo -n '\n# Chromium Binary\nexport CHROME_BIN=/usr/bin/chromium-browser\n' >> ~/.bashrc
 
+# Add Ruby binaries to path
+RUN echo -n '\n# Add Ruby binaries on path\nexport PATH=$PATH:/home/cdodev/.rbenv/versions/2.6.6/bin\n' >> ~/.bashrc
+
 # Make temporary directory and do a bundle install
 RUN sudo mkdir -p /app/src
 COPY src/Gemfile /app/src/.
@@ -63,3 +67,14 @@ RUN cd /app/src \
 
 # Install node-pre-gyp (required for Web packaging)
 RUN sudo apt install -y node-pre-gyp
+
+# Install debugging tools
+RUN sudo apt-get -y install gdb openssh-server rsync lsof
+# Configure sshd as debug entry point into container
+RUN sudo mkdir /var/run/sshd \
+    && sudo bash -c 'install -m755 <(printf "#!/bin/sh\nexit 0") /usr/sbin/policy-rc.d' \
+    && sudo rm -r /etc/ssh/ssh*key \
+    && sudo RUNLEVEL=1 dpkg-reconfigure openssh-server \
+    && sudo sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g' -i /etc/pam.d/sshd \
+    && echo 'cdodev:cdodev' | sudo chpasswd
+ENTRYPOINT sudo /usr/sbin/sshd -D && bash

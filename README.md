@@ -44,6 +44,7 @@ To get everything setup, follow these three steps:
 	- Remove mini_racer gem (I really don't think we use this any more)
 	- Update unf_ext from 0.0.0.72 to 0.0.8
 	- Add gem 'tzinfo-data' (this is required for db seeding in containers)
+	- Add gems 'ruby-debug-ide' and 'debase' (required for debugging)
 - Edit src/Gemfile.lock:
     - Update unf_ext from 0.0.7.2 to 0.0.8
 - Edit src/config/development.yml.erb
@@ -99,11 +100,58 @@ ports:
   - "3307:3306"
 ```
 
-## Optional: Debugging Rails server using RubyMine
-TBD
+## Optional: Run/Debug Dashboard and Pegasus using RubyMine
+WIP:
+
+- Start containers
+- Setup Ruby SDK to put to docker remote one
+- docker container web -> open terminal
+- bin/aws_access
+- Create remote debug session
+- Use the command: RAILS_ENV=development bundle exec rdebug-ide --host 0.0.0.0 --port 1234 --dispatcher-port 26162 -- /home/cdodev/.rbenv/versions/2.6.6/bin/thin start -a 0.0.0.0 -p 3000
+
+## Optional: Run/Debug Dashboard and Pegasus using VS Code
+
+- Start containers using `docker compose up`
+- Open VS Code, and ensure the [Docker extension](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-docker) is installed.
+- Open the ./src folder in VS Code. 
+- Click on the Docker icon in the sidebar and locate the "Containers" panel.
+- Right click on the "codeorg-docker-dev-web" container and select "Attach Visual Studio Code". This will open a new VS Code Window, attached to the docker container.
+- Open a terminal and follow step 2 above (to ensure you have a valid OAUTH_CODE set).
+- If it is not already installed, add the [Ruby language extension](https://marketplace.visualstudio.com/items?itemName=rebornix.Ruby) to the remote VS Code instance.
+- Create a new run/launch configuration using the following: 
+
+```
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug Dashboard",
+      "type": "Ruby",
+      "request": "launch",
+      "program": "/home/cdodev/.rbenv/versions/2.6.6/bin/bundle",
+      "args": ["exec", "thin", "start", "-a", "0.0.0.0", "-p", "3000"],
+      "useBundler": true,
+      "showDebuggerOutput": true,
+      "cwd":"${workspaceRoot}/dashboard"
+    }
+  ]
+}
+```
+
+- Click on the run "Debug Dashboard" button (or press F5) to start debugging.
+- Add breakpoints in your Ruby code and browse to http://localhost:3000.
 
 ## Optional: Debugging web using WebStorm
 TBD
+
+## Optional: Speeding up zsh access to the ./src directory
+
+If you are using [zsh](https://ohmyz.sh/), you may find your terminal is slow when in the ./src directory. This is due to the size of our repository and how zsh displays git info in it's prompt.
+
+To disable git info in the prompt (and speed up the terminal), run the following command from the ./src directory:
+
+- `git config oh-my-zsh.hide-info 1`
 
 ## FAQ
 

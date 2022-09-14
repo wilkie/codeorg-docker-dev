@@ -8,9 +8,12 @@ services:
       args:
         UID: ${FIXUID:-1000}
         GID: ${FIXGID:-1000}
+    cap_add:
+      - SYS_PTRACE
     command: /bin/bash
     ports:
       - "3000:3000"
+      - "8022:22"
     volumes:
       - .:/app
       - $HOME/.aws:/home/cdodev/.aws
