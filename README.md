@@ -100,7 +100,7 @@ ports:
   - "3307:3306"
 ```
 
-## Optional: Run/Debug Dashboard and Pegasus using RubyMine
+## Optional: Run/Debug Dashboard and Pegasus (RubyMine)
 WIP:
 
 - Start containers
@@ -110,11 +110,10 @@ WIP:
 - Create remote debug session
 - Use the command: RAILS_ENV=development bundle exec rdebug-ide --host 0.0.0.0 --port 1234 --dispatcher-port 26162 -- /home/cdodev/.rbenv/versions/2.6.6/bin/thin start -a 0.0.0.0 -p 3000
 
-## Optional: Run/Debug Dashboard and Pegasus using VS Code
+## Optional: Run/Debug Dashboard and Pegasus (VS Code)
 
-- Start containers using `docker compose up`
-- Open VS Code, and ensure the [Docker extension](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-docker) is installed.
-- Open the ./src folder in VS Code. 
+- Start containers, if they are not running, using `docker compose up`
+- Ensure the [Docker extension](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-docker) is installed.
 - Click on the Docker icon in the sidebar and locate the "Containers" panel.
 - Right click on the "codeorg-docker-dev-web" container and select "Attach Visual Studio Code". This will open a new VS Code Window, attached to the docker container.
 - Open a terminal and follow step 2 above (to ensure you have a valid OAUTH_CODE set).
@@ -138,9 +137,18 @@ WIP:
   ]
 }
 ```
-
 - Click on the run "Debug Dashboard" button (or press F5) to start debugging.
-- Add breakpoints in your Ruby code and browse to http://localhost:3000.
+- Set breakpoints in your code and browse to http://localhost:3000.
+
+## Optional: Run/Debug Dashboard and Pegasus in a container running on a remote Linux host (VS Code)
+
+Ensure that you can ssh into the remote host and it has Docker installed.
+
+- Follow steps 1-3 above to copy the codedotorg-docker-repo to the remote host and start the containers.
+- Install the Remote-SSH VS Code extension
+- CTRL-Alt-P and Remote-SSH: Connect to host
+- username@host:port (e.g., simon@remote:22)
+- Once connected, follow the instructions as per above section (Run/Debug Dashboard and Pegasus using VS Code).
 
 ## Optional: Debugging web using WebStorm
 TBD
