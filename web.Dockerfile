@@ -19,10 +19,12 @@ RUN sudo apt-get -y install rbenv \
     && mkdir -p "$(rbenv root)"/plugins \
     && git clone https://github.com/rbenv/ruby-build.git "$(rbenv root)"/plugins/ruby-build
 
-# Install Ruby 2.6.6 and Bundler 1.17.3
+# Install Ruby 2.6.6 and Bundler 1.17.3. Also replace the system ruby (required for RubyMine debugging).
 RUN rbenv install 2.6.6 \
     && echo -n '\n# rbenv init\neval "$(rbenv init -)"\n' >> ~/.bashrc \
-    && rbenv global 2.6.6
+    && rbenv global 2.6.6 \
+    && sudo rm /usr/bin/ruby \
+    && sudo ln -s /home/cdodev/.rbenv/versions/2.6.6/bin/ruby /usr/bin/ruby
 
 # Install Node 14.17.1
 RUN sudo apt-get -y install nodejs npm \
@@ -69,12 +71,4 @@ RUN cd /app/src \
 RUN sudo apt install -y node-pre-gyp
 
 # Install debugging tools
-RUN sudo apt-get -y install gdb openssh-server rsync lsof
-# Configure sshd as debug entry point into container
-RUN sudo mkdir /var/run/sshd \
-    && sudo bash -c 'install -m755 <(printf "#!/bin/sh\nexit 0") /usr/sbin/policy-rc.d' \
-    && sudo rm -r /etc/ssh/ssh*key \
-    && sudo RUNLEVEL=1 dpkg-reconfigure openssh-server \
-    && sudo sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g' -i /etc/pam.d/sshd \
-    && echo 'cdodev:cdodev' | sudo chpasswd
-ENTRYPOINT sudo /usr/sbin/sshd -D && bash
+RUN sudo apt-get -y install gdb rsync lsof

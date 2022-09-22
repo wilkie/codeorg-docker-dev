@@ -101,14 +101,28 @@ ports:
 ```
 
 ## Optional: Run/Debug Dashboard and Pegasus (RubyMine)
-WIP:
 
-- Start containers
-- Setup Ruby SDK to put to docker remote one
-- docker container web -> open terminal
-- bin/aws_access
-- Create remote debug session
-- Use the command: RAILS_ENV=development bundle exec rdebug-ide --host 0.0.0.0 --port 1234 --dispatcher-port 26162 -- /home/cdodev/.rbenv/versions/2.6.6/bin/thin start -a 0.0.0.0 -p 3000
+To setup the remote Ruby SDK:
+
+- Start containers, if they are not running, using `docker compose up`
+- From RubyMine, open the "./src/dashboard" folder. Ignore the "missing gem dependencies" messages when RubyMine first starts.
+- In RubyMine, go into preferences and navigate to the "Ruby SDK and Gems" settings.
+- Click on the + button to create a new configuration and select "Remote Interpreter or Version Manager".
+- Select the Docker Compose (not Docker!) radio button, point to the docker compose yml file (in the codeorg-docker-dev dir), and select the "web" as the image name. For the ruby path, enter "/home/cdodev/.rbenv/versions/2.6.6/bin/ruby".
+- Click OK to create the remote Ruby SDK. RubyMine will list and synchronize the gems from the container.
+- Click on the "Edit Path Mappings" icon. Create a new path mapping. Local src folder should map to "/app/src" on the container.
+- Ensure that the "Remote: ruby" configuration is the default and click OK to exit preferences.
+- RubyMine will now download and index the gems, which will take a few minutes to complete.
+- Once complete, you will be able to navigate around the code base.
+
+To create a new run/debug configuration:
+
+- Create a new Rails run/debug configuration (or edit the current one if auto-created).
+- In the rails configuration, make sure the "Thin" server is selected".
+- Add the environment variable, "AWS_PROFILE=cdo"
+- Select "Use other SDK" and select the Remote SDK from the container.
+- Select docker-compose exec as the attach method (RubyMine will attach to the running container instead of creating a new one)
+- Click on Run or Debug to start Dashboard. Browse to http://localhost:3000. Any breakpoints hit will drop back to the IDE.
 
 ## Optional: Run/Debug Dashboard and Pegasus (VS Code)
 
