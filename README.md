@@ -105,7 +105,8 @@ ports:
 To setup the remote Ruby SDK:
 
 - Start containers, if they are not running, using `docker compose up`
-- From RubyMine, open the "./src/dashboard" folder. Ignore the "missing gem dependencies" messages when RubyMine first starts.
+- From RubyMine, open the "./src" folder. Ignore the "missing gem dependencies" messages when RubyMine first starts.
+- Wait until file indexing completes, then right click on the ./src/dashboard folder in the project pane and select "Mark Directory as... Ruby Project Root"
 - In RubyMine, go into preferences and navigate to the "Ruby SDK and Gems" settings.
 - Click on the + button to create a new configuration and select "Remote Interpreter or Version Manager".
 - Select the Docker Compose (not Docker!) radio button, point to the docker compose yml file (in the codeorg-docker-dev dir), and select the "web" as the image name. For the ruby path, enter "/home/cdodev/.rbenv/versions/2.6.6/bin/ruby".
@@ -123,6 +124,12 @@ To create a new run/debug configuration:
 - Select "Use other SDK" and select the Remote SDK from the container.
 - Select docker-compose exec as the attach method (RubyMine will attach to the running container instead of creating a new one)
 - Click on Run or Debug to start Dashboard. Browse to http://localhost:3000. Any breakpoints hit will drop back to the IDE.
+
+To run the rails console from within RubyMine:
+
+- Select Run Rails Console...
+- If the console fails, edit the newly created rails console configuration and add the "AWS_PROFILE=cdo" environment var.
+
 
 ## Optional: Run/Debug Dashboard and Pegasus (VS Code)
 
