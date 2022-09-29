@@ -43,12 +43,11 @@ RUN sudo apt-get -y install libsqlite3-dev libmysqlclient-dev mysql-client-core-
 # Install AWSCLI
 RUN cd /home/cdodev \
     && if [ $(uname -m) = "aarch64" ]; then curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip"; else curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"; fi \
-    && curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip" \
     && unzip awscliv2.zip \
     && ./aws/install
 
-# Add AWS_PROFILE env var to bashrc
-RUN echo -n '\n# AWS Profile\nexport AWS_PROFILE=cdo\n' >> ~/.bashrc
+# Add AWS_PROFILE env var
+ENV AWS_PROFILE=cdo
 
 # Add CHROME_BIN env var to bashrc
 RUN echo -n '\n# Chromium Binary\nexport CHROME_BIN=/usr/bin/chromium-browser\n' >> ~/.bashrc
@@ -72,3 +71,10 @@ RUN sudo apt install -y node-pre-gyp
 
 # Install debugging tools
 RUN sudo apt-get -y install gdb rsync lsof
+
+# Install rbspy
+RUN cd /home/cdodev \
+    && if [ $(uname -m) = "aarch64" ]; then curl -L "https://github.com/rbspy/rbspy/releases/download/v0.12.1/rbspy-aarch64-musl.tar.gz" -o "rbspy.tar.gz"; else curl -L "https://github.com/rbspy/rbspy/releases/download/v0.12.1/rbspy-x86_64-musl.tar.gz" -o "rbspy.tar.gz"; fi \
+    && tar -xvf ./rbspy.tar.gz \
+    && chmod +x ./rbspy*musl \
+    && sudo cp ./rbspy*musl /usr/local/bin
