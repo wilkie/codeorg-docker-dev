@@ -41,7 +41,6 @@ To get everything setup, follow these three steps:
 	- ```cd codeorg-docker-dev```
 	- ```git clone git@github.com:code-dot-org/code-dot-org.git src```
 - Edit src/Gemfile:
-	- Remove mini_racer gem (I really don't think we use this any more)
 	- Update unf_ext from 0.0.0.72 to 0.0.8
 	- Add gem 'tzinfo-data' (this is required for db seeding in containers)
 	- Add gems 'ruby-debug-ide' and 'debase' (required for debugging)
