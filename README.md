@@ -43,9 +43,11 @@ To get everything setup, follow these three steps:
 - Edit src/Gemfile:
 	- Update unf_ext from 0.0.0.72 to 0.0.8
 	- Add gem 'tzinfo-data' (this is required for db seeding in containers)
-	- Add gems 'ruby-debug-ide' and 'debase' (required for debugging)
+	- If you are using an M1 Mac/ARM-based machine, add gem 'libv8-node', '~> 16.10.0.0'
+	- if you want debugging support, add gems 'ruby-debug-ide' and 'debase'
 - Edit src/Gemfile.lock:
     - Update unf_ext from 0.0.7.2 to 0.0.8
+		- If you are using an M1 Mac/ARM-based machine, remove any reference to mini_racer and it's libv8 dependency.
 - Edit src/config/development.yml.erb
 	- Set db_writer to ```'mysql://root:password@db/'``` (this points the development environment to the db container vs. the local machine).
 - Build the containers:
