@@ -80,7 +80,20 @@ If everything starts fine, you should see ```mysqld: ready for connections.``` Y
 - Open a web browser and browse to http://localhost-studio.code.org:3000
 
 ## Optional: Running Tests
-TBD
+To run dashboard tests:
+
+- Edit src/config/test.yml.erb
+	- Set db_writer to ```'mysql://root:password@db/'``` (this points to the db running in the other container).
+- Create the Pegasus test db and run the Pegasus tests:
+	- ```cd /app/src/pegasus```
+	- ```RAILS_ENV=test bundle exec rake test:reset_dependencies```
+	- ```RAILS_ENV=test bundle exec rake test```
+- Create the Dashboard test db and run the test suite:
+	- ```cd /app/src/dashboard```
+  - ```UTF8=1 RAILS_ENV=test bundle exec rake db:reset db:test:prepare```
+	- ```RAILS_ENV=test bundle exec rake assets:precompile```
+	- Make sure all spring processes have been stopped.
+	- ```RAILS_ENV=test bundle exec rails test```
 
 ## Optional: Exposing MySQL (on port 3306) to the host
 If you have a MySQL client on your host laptop (e.g., JetBrains Datagrip or SQLPro), you can also connect directly to the MySQL database running in the db container.
