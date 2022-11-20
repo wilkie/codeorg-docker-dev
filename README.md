@@ -32,7 +32,7 @@ If you are on a Linux machine, you can follow the instructions [here](https://do
 
 Note: This repo has been tested using Docker version 20.10.9.
 
-To get everything setup, follow these three steps:
+To get everything setup, follow these steps:
 
 ## Step 1: Build and run the containers
 - Open a terminal and clone this repo:
@@ -79,8 +79,8 @@ If everything starts fine, you should see ```mysqld: ready for connections.``` Y
 	- ```bin/dashboard-server```
 - Open a web browser and browse to http://localhost-studio.code.org:3000
 
-## Optional: Running Tests
-To run dashboard tests:
+## Step 4: Running tests
+To run pegasus and dashboard tests:
 
 - Edit src/config/test.yml.erb
 	- Set db_writer to ```'mysql://root:password@db/'``` (this points to the db running in the other container).
@@ -90,7 +90,7 @@ To run dashboard tests:
 	- ```RAILS_ENV=test bundle exec rake test```
 - Create the Dashboard test db and run the test suite:
 	- ```cd /app/src/dashboard```
-  - ```UTF8=1 RAILS_ENV=test bundle exec rake db:reset db:test:prepare```
+	- ```UTF8=1 RAILS_ENV=test bundle exec rake db:reset db:test:prepare```
 	- ```RAILS_ENV=test bundle exec rake assets:precompile```
 	- Make sure all spring processes have been stopped.
 	- ```RAILS_ENV=test bundle exec rails test```
@@ -184,9 +184,6 @@ Ensure that you can ssh into the remote host and it has Docker installed.
 - CTRL-Alt-P and Remote-SSH: Connect to host
 - username@host:port (e.g., simon@remote:22)
 - Once connected, follow the instructions as per above section (Run/Debug Dashboard and Pegasus using VS Code).
-
-## Optional: Debugging web using WebStorm
-TBD
 
 ## Optional: Speeding up zsh access to the ./src directory
 
