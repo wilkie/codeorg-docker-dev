@@ -1,5 +1,3 @@
-<img src="https://www.docker.com/wp-content/uploads/2022/03/Moby-logo.png" width=200>
-
 # Code<span>.org Docker Dev Environment
 The Code<span>.org Docker dev environment enables you to develop on the Code<span>.org platform using Docker containers.
 
