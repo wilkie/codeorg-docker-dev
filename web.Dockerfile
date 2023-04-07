@@ -2,7 +2,7 @@ FROM ubuntu:bionic
 
 # Additional required packages
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
-    && apt-get -y install --no-install-recommends autoconf bison build-essential libssl-dev libyaml-dev libreadline6-dev zlib1g-dev libncurses5-dev libffi-dev libgdbm5 libgdbm-dev git chromium-browser parallel
+    && apt-get -y install --no-install-recommends autoconf bison build-essential libssl-dev libyaml-dev libreadline6-dev zlib1g-dev libncurses5-dev libffi-dev libgdbm5 libgdbm-dev git chromium-browser parallel xvfb x11vnc firefox
 
 # Set the non-root user for the container and switch
 ARG UID
