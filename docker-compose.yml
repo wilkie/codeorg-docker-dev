@@ -1,5 +1,6 @@
 version: '3.9'
 services:
+  # Exposes port 3000
   web:
     container_name: web
     hostname: web
@@ -13,16 +14,18 @@ services:
     command: /bin/bash
     ports:
       - "3000:3000"
-      - "1234:1234"
     volumes:
       - .:/app
-      - $HOME/.aws:/home/cdodev/.aws
+      - $HOME/.aws-docker:/home/cdodev/.aws
     tty: true
     depends_on:
       - "db"
     security_opt:
       - seccomp=chrome.json
     working_dir: /app/src/dashboard
+
+  # mysql 5.7.30
+  # Internally exposes 3306 to other containers as 'db'
   db:
     container_name: db
     hostname: db
@@ -36,16 +39,27 @@ services:
       - "3306"
     volumes:
       - ./data:/var/lib/mysql
-  s3:
-    container_name: s3
-    hostname: s3
-    image: quay.io/minio/minio
-    command: server /s3 --console-address ":9001"
-    volumes:
-      - ./s3:/s3
-    expose:
-      - "9000"
+
+  # minio version RELEASE.2021-07-30T00-02-00Z
+  # Exposes ports 9000 and 9001 to the world
+  # You can log into the console at localhost:9001 with the given
+  # username and password (codeorg / allstudents)
+  minio:
+    container_name: minio
+    hostname: minio
+    image: pixelchrome/minio-arm:latest-arm32v7
     ports:
       - "9000:9000"
       - "9001:9001"
-
+    volumes:
+      - ./minio1_storage:/data1
+      - ./minio2_storage:/data2
+      - ./minio3_storage:/data3
+      - ./minio4_storage:/data4
+    environment:
+      MINIO_VOLUMES: "http://minio:9000/data{1...4}"
+      MINIO_SERVER_URL: "http://minio:9000"
+      MINIO_ROOT_USER: codeorg
+      MINIO_ROOT_PASSWORD: allstudents
+      MINIO_STORAGE_CLASS_STANDARD: "EC:2"
+    command: server --console-address ":9001" /data1 /data2 /data3 /data4

@@ -1,4 +1,8 @@
-data
-src
-s3
+data/
+src/
 .idea
+minio1_storage/
+minio2_storage/
+minio3_storage/
+minio4_storage/
+minio_storage/
