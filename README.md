@@ -34,10 +34,14 @@ To get everything setup, follow these steps:
 
 ## Step 1: Build and run the containers
 - Open a terminal and clone this repo:
-	- ```git clone git@github.com:simonguest/codeorg-docker-dev.git```
+	- ```git clone git@github.com:wilkie/codeorg-docker-dev.git```
 - Within this directory, git clone the Code<span>.org repository as a sub-directory called src:
 	- ```cd codeorg-docker-dev```
 	- ```git clone git@github.com:code-dot-org/code-dot-org.git src```
+- Apply the included patch
+    - ```cd src```
+    - ```patch -p1 < ../0001-Offline-updates.patch```
+- The next steps are manual steps if the included patch fails.
 - Edit src/Gemfile:
 	- Update unf_ext from 0.0.7.2 to 0.0.8
 	- Add gem 'tzinfo-data' (this is required for db seeding in containers)
