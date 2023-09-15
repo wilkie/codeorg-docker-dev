@@ -12,17 +12,30 @@ services:
     cap_add:
       - SYS_PTRACE
     command: /bin/bash
+    environment:
+      SELENIUM_HOST: selenium
     ports:
+      # Web server
       - "3000:3000"
+      # Storybooks
+      - "9001:9001"
     volumes:
       - .:/app
+      - ./rbenv:/home/cdodev/.rbenv
+      - ./nvm:/home/cdodev/.nvm
       - $HOME/.aws-docker:/home/cdodev/.aws
     tty: true
     depends_on:
       - "db"
-    security_opt:
-      - seccomp=chrome.json
-    working_dir: /app/src/dashboard
+      - "minio"
+    working_dir: /app/src
+    #command: ./bin/dashboard-server
+    networks:
+      cdo_network:
+        aliases:
+          - localhost.code.org
+          - localhost-studio.code.org
+          - localhost-hourofcode.org
 
   # mysql 5.7.30
   # Internally exposes 3306 to other containers as 'db'
@@ -40,7 +53,23 @@ services:
     expose:
       - "3306"
     volumes:
-      - ./data:/var/lib/mysql
+      - ./.mysql-data:/var/lib/mysql
+    networks:
+      - cdo_network
+
+  selenium:
+    container_name: selenium
+    hostname: selenium
+    image: seleniarm/standalone-chromium:latest
+    expose:
+      - "5900"
+      - "4444"
+      - "7900"
+    environment:
+      JAVA_OPTS: -Dwebdriver.chrome.whitelistedIps= -Dwebdriver.chrome.allowedIps=
+    shm_size: '2gb'
+    networks:
+      - cdo_network
 
   # minio version RELEASE.2021-07-30T00-02-00Z
   # Exposes ports 9000 and 9001 to the world
@@ -54,16 +83,80 @@ services:
     image: pixelchrome/minio-arm:latest-arm32v7
     ports:
       - "9000:9000"
-      - "9001:9001"
+      - "3001:3001"
     volumes:
-      - ./minio1_storage:/data1
-      - ./minio2_storage:/data2
-      - ./minio3_storage:/data3
-      - ./minio4_storage:/data4
+      - ./.minio1-storage:/data1
+      - ./.minio2-storage:/data2
+      - ./.minio3-storage:/data3
+      - ./.minio4-storage:/data4
     environment:
       MINIO_VOLUMES: "http://minio:9000/data{1...4}"
       MINIO_SERVER_URL: "http://minio:9000"
       MINIO_ROOT_USER: codeorg
       MINIO_ROOT_PASSWORD: allstudents
       MINIO_STORAGE_CLASS_STANDARD: "EC:2"
-    command: server --console-address ":9001" /data1 /data2 /data3 /data4
+    command: server --console-address ":3001" /data1 /data2 /data3 /data4
+    networks:
+      - cdo_network
+
+  # The AWS lambda for Java builder
+  lambda-javabuilder:
+    container_name: lambda-javabuilder
+    hostname: lambda-javabuilder
+    build:
+      dockerfile: ./src/aws/lambda/javabuilder/lambda.Dockerfile
+    depends_on:
+      - "minio"
+    environment:
+      AWS_REGION: "us-east-1"
+      API_ENDPOINT: "http://minio:9000"
+      CONTENT_BUCKET_NAME: "cdo-javabuilder-content"
+      CONTENT_BUCKET_URL: "http://"
+    networks:
+      - cdo_network
+
+  # The AWS lambda for evaluating AI rubrics
+  lambda-ai-rubrics:
+    container_name: lambda-ai-rubrics
+    hostname: lambda-ai-rubrics
+    build:
+      dockerfile: ./src/aws/lambda/ai_rubrics/lambda.Dockerfile
+    networks:
+      - cdo_network
+
+  sqs:
+    container_name: sqs
+    image: vsouza/sqs-local
+    expose:
+      - "9324"
+    networks:
+      - cdo_network
+
+  localstack:
+    container_name: localstack_main
+    image: localstack/localstack:0.14.2
+    expose:
+      - "4566"
+      - "53"
+      - "53/udp"
+      - "443"
+      - "4510-4530"
+      - "4571"
+    environment:
+      - DEBUG=${DEBUG-}
+      - SERVICES=${SERVICES-}
+      - DATA_DIR=${DATA_DIR-}
+      - LAMBDA_EXECUTOR=local
+      - LOCALSTACK_API_KEY=${LOCALSTACK_API_KEY-}
+      - HOST_TMP_FOLDER=${TMPDIR:-/tmp/}localstack
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - DISABLE_CORS_CHECKS=1
+    volumes:
+      - "${TMPDIR:-/tmp}/localstack:/tmp/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - cdo_network
+
+networks:
+  cdo_network:
+    driver: bridge

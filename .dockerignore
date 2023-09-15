@@ -1,5 +1,21 @@
+# Disallow src and data paths
 ./src
-./data
+./.mysql-data
+./.minio1-storage
+./.minio2-storage
+./.minio3-storage
+./.minio4-storage
+
+# Disallow javabuilder
+./javabuilder
+
+# Allow the Gemfiles and ruby-version to be copied in
 !src/Gemfile
 !src/Gemfile.lock
 !src/.ruby-version
+
+# Allow lambda code
+!src/aws/lambda
+
+# Allow javabuilder code
+!javabuilder/org-code-javabuilder

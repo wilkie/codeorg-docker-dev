@@ -31,7 +31,7 @@ RUN sudo -E apt-get -y install --no-install-recommends libmagickwand-dev imagema
 RUN sudo -E apt-get -y install --no-install-recommends cmake wget libaio-dev
 
 # Needed dependencies in order to VNC into the container
-#RUN sudo -E apt-get -y install xvfb x11vnc firefox curl
+#RUN sudo -E apt-get -y install xvfb x11vnc firefox
 
 # Build and Install MySQL Native Client
 RUN cd /home/${USERNAME} \
@@ -47,11 +47,14 @@ RUN cd /home/${USERNAME}/mysql-${MYSQL_VERSION} \
 
 # Install rbenv
 RUN sudo -E apt-get -y install rbenv \
-    && mkdir -p "$(rbenv root)"/plugins \
-    && git clone https://github.com/rbenv/ruby-build.git "$(rbenv root)"/plugins/ruby-build
+    && sudo mkdir -p "/opt/plugins" \
+    && mkdir -p /home/${USERNAME}/.rbenv/plugins \
+    && sudo chown -R ${USERNAME} /opt/plugins \
+    && git clone https://github.com/rbenv/ruby-build.git /opt/plugins/ruby-build \
+    && ln -s /opt/plugins/ruby-build /home/${USERNAME}/.rbenv/plugins/ruby-build
 
 # Install Ruby. Also replace the system ruby (required for RubyMine debugging).
-ARG RUBY_VERSION=2.7.5
+ARG RUBY_VERSION=3.0.5
 RUN rbenv install ${RUBY_VERSION} \
     && echo -n '\n# rbenv init\neval "$(rbenv init -)"\n' >> ~/.bashrc \
     && rbenv global ${RUBY_VERSION} \
@@ -72,7 +75,12 @@ RUN cd /home/${USERNAME} && \
 # Install Yarn
 ARG YARN_VERSION=1.22.19
 RUN . $NVM_DIR/nvm.sh \
-    && npm i -g yarn@${YARN_VERSION}
+    && npm i -g yarn@${YARN_VERSION} \
+    && sudo mkdir -p /opt/base-nvm \
+    && sudo chown -R ${USERNAME} /opt/base-nvm \
+    && cp -r ${NVM_DIR}/* /opt/base-nvm/. \
+    && rm -f /opt/base-nvm/README.md \
+    && sudo chown -R ${USERNAME} /opt/base-nvm
 
 # Install AWSCLI
 RUN cd /home/${USERNAME} \
@@ -82,9 +90,6 @@ RUN cd /home/${USERNAME} \
 
 # Add AWS_PROFILE env var
 ENV AWS_PROFILE=cdo
-
-# Add CHROME_BIN env var to bashrc
-RUN echo -n '\n# Chromium Binary\nexport CHROME_BIN=/usr/bin/chromium-browser\n' >> ~/.bashrc
 
 # Add Ruby binaries to path
 RUN echo -n "\n# Add Ruby binaries on path\nexport PATH=\$PATH:/home/${USERNAME}/.rbenv/versions/${RUBY_VERSION}/bin\n" >> ~/.bashrc
@@ -102,6 +107,9 @@ RUN cd /home/${USERNAME} \
     && chmod +x ./rbspy*musl \
     && sudo cp ./rbspy*musl /usr/local/bin
 
+RUN sudo apt-get -y install --no-install-recommends \
+    python2
+
 # Make temporary directory and do a bundle install
 ARG BUNDLER_VERSION=2.3.22
 RUN sudo mkdir -p /app/src
@@ -112,4 +120,7 @@ RUN sudo chown -R ${USERNAME} /app
 RUN cd /app/src \
     && eval "$(rbenv init -)" \
     && gem install bundler -v ${BUNDLER_VERSION} \
-    && RAILS_ENV=development bundle install
+    && RAILS_ENV=development bundle config set --local without staging production test levelbuilder \
+    && RAILS_ENV=development bundle install \
+    && sudo cp -r /home/${USERNAME}/.rbenv /opt/base-rbenv \
+    && sudo chown -R ${USERNAME} /opt/base-rbenv
