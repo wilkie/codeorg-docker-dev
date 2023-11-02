@@ -14,6 +14,7 @@ services:
     command: /bin/bash
     environment:
       SELENIUM_HOST: selenium
+      SELENIUM_URL: 'http://selenium:4444/wd/hub'
     ports:
       # Web server
       - "3000:3000"
@@ -96,64 +97,6 @@ services:
       MINIO_ROOT_PASSWORD: allstudents
       MINIO_STORAGE_CLASS_STANDARD: "EC:2"
     command: server --console-address ":3001" /data1 /data2 /data3 /data4
-    networks:
-      - cdo_network
-
-  # The AWS lambda for Java builder
-  lambda-javabuilder:
-    container_name: lambda-javabuilder
-    hostname: lambda-javabuilder
-    build:
-      dockerfile: ./src/aws/lambda/javabuilder/lambda.Dockerfile
-    depends_on:
-      - "minio"
-    environment:
-      AWS_REGION: "us-east-1"
-      API_ENDPOINT: "http://minio:9000"
-      CONTENT_BUCKET_NAME: "cdo-javabuilder-content"
-      CONTENT_BUCKET_URL: "http://"
-    networks:
-      - cdo_network
-
-  # The AWS lambda for evaluating AI rubrics
-  lambda-ai-rubrics:
-    container_name: lambda-ai-rubrics
-    hostname: lambda-ai-rubrics
-    build:
-      dockerfile: ./src/aws/lambda/ai_rubrics/lambda.Dockerfile
-    networks:
-      - cdo_network
-
-  sqs:
-    container_name: sqs
-    image: vsouza/sqs-local
-    expose:
-      - "9324"
-    networks:
-      - cdo_network
-
-  localstack:
-    container_name: localstack_main
-    image: localstack/localstack:0.14.2
-    expose:
-      - "4566"
-      - "53"
-      - "53/udp"
-      - "443"
-      - "4510-4530"
-      - "4571"
-    environment:
-      - DEBUG=${DEBUG-}
-      - SERVICES=${SERVICES-}
-      - DATA_DIR=${DATA_DIR-}
-      - LAMBDA_EXECUTOR=local
-      - LOCALSTACK_API_KEY=${LOCALSTACK_API_KEY-}
-      - HOST_TMP_FOLDER=${TMPDIR:-/tmp/}localstack
-      - DOCKER_HOST=unix:///var/run/docker.sock
-      - DISABLE_CORS_CHECKS=1
-    volumes:
-      - "${TMPDIR:-/tmp}/localstack:/tmp/localstack"
-      - "/var/run/docker.sock:/var/run/docker.sock"
     networks:
       - cdo_network
 
