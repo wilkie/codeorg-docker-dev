@@ -41,7 +41,7 @@ RUN cd /home/${USERNAME} \
 RUN cd /home/${USERNAME}/mysql-${MYSQL_VERSION} \
     && mkdir bld \
     && cd bld \
-    && cmake -DDOWNLOAD_BOOST=1 -DWITH_BOOST=boost -DBUILD_CONFIG=mysql_release .. \
+    && cmake -DDOWNLOAD_BOOST=1 -DWITH_BOOST=boost -DBUILD_CONFIG=mysql_release -DCMAKE_INSTALL_PREFIX=/usr .. \
     && make \
     && sudo make install
 

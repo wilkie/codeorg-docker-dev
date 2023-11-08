@@ -4,6 +4,7 @@ services:
   web:
     container_name: web
     hostname: web
+    image: codedotorg/codedotorg-web
     build:
       dockerfile: ./web.Dockerfile
       args:
@@ -11,15 +12,14 @@ services:
         GID: ${FIXGID:-1000}
     cap_add:
       - SYS_PTRACE
-    command: /bin/bash
-    environment:
-      SELENIUM_HOST: selenium
-      SELENIUM_URL: 'http://selenium:4444/wd/hub'
-    ports:
-      # Web server
-      - "3000:3000"
+    #ports:
       # Storybooks
-      - "9001:9001"
+      #- "9001:9001"
+    ports:
+      # Web server port
+      - "3000:3000"
+      # Web server port
+      - "3002:3002"
     volumes:
       - .:/app
       - ./rbenv:/home/cdodev/.rbenv
@@ -27,16 +27,116 @@ services:
       - $HOME/.aws-docker:/home/cdodev/.aws
     tty: true
     depends_on:
-      - "db"
-      - "minio"
+      - db
+      - minio
     working_dir: /app/src
     #command: ./bin/dashboard-server
     networks:
-      cdo_network:
+      - cdo_network
+    profiles:
+      - web
+
+  aws-access:
+    extends: web
+    image: codedotorg/codedotorg-aws-access
+    build:
+      dockerfile: ./headless.Dockerfile
+      args:
+        UID: ${FIXUID:-1000}
+        GID: ${FIXGID:-1000}
+    ports:
+      # VNC port
+      - "5900:5900"
+    command: /bin/bash -i -c "cd /app; /bin/bash /app/bin/vnc-aws-access.sh"
+    profiles:
+      - aws-access
+
+  server:
+    extends: web
+    command: /bin/bash -i -c "./bin/dashboard-server"
+    ports:
+      # Web server port
+      - "3000:3000"
+    profiles:
+      - test
+
+  shell:
+    extends: web
+    command: /bin/bash
+    profiles:
+      - shell
+
+  seed:
+    extends: web
+    command: /bin/bash -ic 'cd dashboard; bundle exec rake seed:ui_test'
+    profiles:
+      - seed
+
+  migrate:
+    extends: web
+    command: /bin/bash -ic 'cd dashboard; bundle exec rake db:migrate && cd ../pegasus && bundle exec rake db:migrate'
+    profiles:
+      - migrate
+
+  irb:
+    extends: web
+    command: /bin/bash -ic 'bundle exec irb'
+    profiles:
+      - irb
+
+  node:
+    extends: web
+    command: /bin/bash -ic 'node'
+    profiles:
+      - node
+
+  console:
+    extends: web
+    command: ./bin/dashboard-console
+    profiles:
+      - console
+
+  # This is a testing environment
+  test:
+    container_name: test-web
+    hostname: test-web
+    extends: web
+    environment:
+      # Ensure the local selenium is used
+      SELENIUM_HOST: selenium
+      SELENIUM_URL: 'http://selenium:4444/wd/hub'
+    command: /bin/bash -i -c "./bin/dashboard-server"
+    healthcheck:
+      test: "curl --fail http://localhost:3000"
+      interval: 2s
+      retries: 100
+      start_period: 30s
+      timeout: 10s
+    expose:
+      - "3000"
+    profiles:
+      - test
+    networks:
+      cdo_network_test:
         aliases:
           - localhost.code.org
           - localhost-studio.code.org
           - localhost-hourofcode.org
+
+  ui-tests:
+    extends: web
+    command: /bin/bash -ic 'bundle exec rake test:ui'
+    environment:
+      # Ensure the local selenium is used
+      SELENIUM_HOST: selenium
+      SELENIUM_URL: 'http://selenium:4444/wd/hub'
+    depends_on:
+      - selenium
+      - test
+    profiles:
+      - test
+    networks:
+      - cdo_network_test
 
   # mysql 5.7.30
   # Internally exposes 3306 to other containers as 'db'
@@ -55,9 +155,20 @@ services:
       - "3306"
     volumes:
       - ./.mysql-data:/var/lib/mysql
+    profiles:
+      - web
     networks:
       - cdo_network
+      - cdo_network_test
 
+  # Runs a database console session
+  db-console:
+    extends: web
+    command: ./bin/mysql-client-admin
+    profiles:
+      - db-console
+
+  # A Selenium server running Chrome
   selenium:
     container_name: selenium
     hostname: selenium
@@ -69,8 +180,10 @@ services:
     environment:
       JAVA_OPTS: -Dwebdriver.chrome.whitelistedIps= -Dwebdriver.chrome.allowedIps=
     shm_size: '2gb'
+    profiles:
+      - test
     networks:
-      - cdo_network
+      - cdo_network_test
 
   # minio version RELEASE.2021-07-30T00-02-00Z
   # Exposes ports 9000 and 9001 to the world
@@ -97,9 +210,13 @@ services:
       MINIO_ROOT_PASSWORD: allstudents
       MINIO_STORAGE_CLASS_STANDARD: "EC:2"
     command: server --console-address ":3001" /data1 /data2 /data3 /data4
+    profiles:
+      - web
     networks:
       - cdo_network
 
 networks:
   cdo_network:
+    driver: bridge
+  cdo_network_test:
     driver: bridge

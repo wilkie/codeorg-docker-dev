@@ -1,0 +1,245 @@
+#!/bin/bash
+set -e
+
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+CMD_NAME=${0}
+if [[ ${0} == /* ]]; then
+    CMD_NAME=cdo
+fi
+
+# Keep track of the commands the script supports
+# This is an associative array. The key is the command name
+# and the value is the help text.
+declare -A GENERAL
+declare -A SERVICES
+declare -A MAINTENANCE
+declare -A INTERACTIVE
+declare -A TESTING
+
+if [[ "$#" -le 0 || $1 == "help" ]]; then
+    echo "Usage: ${CMD_NAME} <command> [<...args>]"
+    echo "List commands: ${CMD_NAME} help"
+
+    if [[ ${1} != "help" ]]; then
+        exit 0
+    fi
+fi
+
+command=$1
+shift
+
+if [ "${command}" == "init" ]; then
+    echo "Initializing cdo scripts..."
+    echo "- Copying bash tab completion"
+    mkdir -p ~/.local/share/bash-completion
+    cp ${SCRIPT_DIR}/cdo-completion.bash ~/.local/share/bash-completion
+
+    if [[ -f ~/.bashrc ]]; then
+        if [[ -z `grep "Code.org Repository " ~/.bashrc` ]]; then
+            echo "- Adding cdo script binary to the PATH in bashrc"
+            echo "# Code.org Repository (cdo) binary path:" >> ~/.bashrc
+            echo "export PATH=\${PATH}:${SCRIPT_DIR}" >> ~/.bashrc
+        else
+            echo "- Not adding cdo script binary to the PATH in bashrc... already there"
+        fi
+    fi
+
+    echo "- Done."
+    exit $?
+fi
+
+if [ "${command}" == "reset" ]; then
+    rm -rf rbenv nvm
+    git checkout rbenv nvm
+    command="install"
+else
+    GENERAL[reset]="This is reset."
+fi
+
+if [ "${command}" == "reset-nvm" ]; then
+    rm -rf nvm
+    git checkout nvm
+    command="install"
+else
+    GENERAL[reset-nvm]="This is reset-nvm."
+fi
+
+if [ "${command}" == "reset-rbenv" ]; then
+    rm -rf rbenv
+    git checkout rbenv
+    command="install"
+else
+    GENERAL[reset-rbenv]="This is reset-rbenv."
+fi
+
+if [ "${command}" == "install" ]; then
+    # Copy over a pre-built copy of rbenv
+    if [ ! -e rbenv/versions ]; then
+        docker compose run web bash -ic "cp -r /opt/base-rbenv/* /home/cdodev/.rbenv/."
+    fi
+
+    # Copy over a pre-built copy of nvm
+    if [ ! -e nvm/package.json ]; then
+        docker compose run web bash -ic "cp -r /opt/base-nvm/* /home/cdodev/.nvm/."
+    fi
+
+    # Bundle
+    docker compose run web bash -ic "bundle install"
+
+    # Rake install
+    docker compose run web bash -ic "bundle exec rake install"
+    exit $?
+else
+    GENERAL[install]="This is install."
+fi
+
+if [ "${command}" == "stop" ]; then
+    if [[ ! -z ${1} ]]; then
+        docker compose stop ${@}
+    else
+        docker compose down --remove-orphans
+    fi
+    exit $?
+else
+    GENERAL[stop]="This is stop."
+fi
+
+if [ "${command}" == "shell" ]; then
+    docker compose run --rm shell
+    exit $?
+else
+    GENERAL[shell]="Drop into an interactive shell in the web server machine."
+fi
+
+if [ "${command}" == "setup" ]; then
+    echo "Setting up DB"
+    docker compose exec db /bin/bash -i -c "mysql db --password=password 'ALTER DATABASE dashboard_development CHARACTER SET utf8 COLLATE utf8_unicode_ci;'"
+    docker compose exec db /bin/bash -i -c "mysql db --password=password 'ALTER DATABASE dashboard_development CHARACTER SET utf8 COLLATE utf8_unicode_ci;'"
+    docker compose exec db /bin/bash -i -c "mysql db --password=password 'ALTER DATABASE dashboard_test CHARACTER SET utf8 COLLATE utf8_unicode_ci;'"
+    exit $?
+else
+    GENERAL[setup]="This is setup."
+fi
+
+if [ "${command}" == "server" ]; then
+    docker compose stop server
+    if [ "${1}" == "-d" ]; then
+        echo "Running server in the background..."
+        docker compose up -d server
+    else
+        echo "Running server in the foreground"
+        docker compose up server
+    fi
+    exit $?
+else
+    SERVICES[server]="Run the web server in the foreground. Use '-d' to run in background."
+fi
+
+if [ "${command}" == "console" ]; then
+    docker compose run --rm console
+    exit $?
+else
+    INTERACTIVE[console]="Drop into an interactive Ruby session for the application."
+fi
+
+if [ "${command}" == "sql" ]; then
+    docker compose run --rm db-console
+    exit $?
+else
+    INTERACTIVE[sql]="Drop into an interactive shell within the mysql db."
+fi
+
+if [ "${command}" == "irb" ]; then
+    docker compose run --rm irb
+    exit $?
+else
+    INTERACTIVE[irb]="This is irb."
+fi
+
+if [ "${command}" == "node" ]; then
+    docker compose run --rm node
+    exit $?
+else
+    INTERACTIVE[node]="This is node."
+fi
+
+if [ "${command}" == "seed" ]; then
+    SEED=ui_test
+    if [[ ! -z ${1} ]]; then
+        SEED=${1}
+        shift
+    fi
+    docker compose run --rm seed /bin/bash -ic "cd dashboard; bundle exec rake seed:${SEED}"
+    exit $?
+else
+    MAINTENANCE[seed]="This seeds the database."
+fi
+
+if [ "${command}" == "migrate" ]; then
+    docker compose run --rm migrate
+    exit $?
+else
+    MAINTENANCE[migrate]="Run all pending database migrations."
+fi
+
+if [ "${command}" == "unit-tests" ]; then
+    docker compose run --rm unit-tests /bin/bash -ic "cd dashboard; bundle exec spring testunit"
+    exit $?
+else
+    TESTING[unit-tests]="Run the unit tests."
+fi
+
+if [ "${command}" == "ui-tests" ]; then
+    docker compose run --rm ui-tests /bin/bash -ic "bundle exec rake test:ui feature=${@}"
+    exit $?
+else
+    TESTING[ui-tests]="Run the UI (features) tests."
+fi
+
+if [ "${command}" == "reset-test" ]; then
+    # TODO: add this command more fully (db:create... db:minimum_seed)
+    docker compose run --rm unit-tests /bin/bash -ic "cd dashboard; bundle exec rake db:drop"
+    exit $?
+else
+    TESTING[reset-test]="Drop and recreate the test database (for unit tests.)"
+fi
+
+# Detect that we need help! (We entered an unknown command)
+if [ "${command}" != "help" ]; then
+    echo "'${command}' is not a known command."
+fi
+
+declare -A CATEGORIES
+CATEGORIES[General]="GENERAL"
+CATEGORIES[Services]="SERVICES"
+CATEGORIES[Maintenance]="MAINTENANCE"
+CATEGORIES[Testing]="TESTING"
+CATEGORIES[Interactive]="INTERACTIVE"
+
+# First, determine the longest command (so we can tab things over)
+MAX_COMMAND_LENGTH=1
+for category in "${!CATEGORIES[@]}"; do
+    name="${CATEGORIES[$category]}"
+    declare -n COMMANDS="$name"
+
+    for command in "${!COMMANDS[@]}"; do
+        MAX_COMMAND_LENGTH=$(( $MAX_COMMAND_LENGTH > ${#command} ? ${MAX_COMMAND_LENGTH} : ${#command} ))
+    done
+done
+
+# Print out the list of general commands
+for category in "${!CATEGORIES[@]}"; do
+    echo ""
+    echo "${category}: "
+    name="${CATEGORIES[$category]}"
+    declare -n COMMANDS="$name"
+
+    # Sort the list of commands
+    IFS=$'\n' sorted=($(sort -n <<<"${!COMMANDS[*]}"))
+    unset IFS
+
+    # Print out each command
+    for command in "${sorted[@]}"; do
+        printf "  %-${MAX_COMMAND_LENGTH}s    %s\n" ${command} "${COMMANDS[$command]}"
+    done
+done
