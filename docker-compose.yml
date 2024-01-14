@@ -6,7 +6,7 @@ services:
     hostname: web
     image: codedotorg/codedotorg-web
     build:
-      dockerfile: ./web.Dockerfile
+      dockerfile: ./dockerfiles/web.Dockerfile
       args:
         UID: ${FIXUID:-1000}
         GID: ${FIXGID:-1000}
@@ -15,11 +15,11 @@ services:
     #ports:
       # Storybooks
       #- "9001:9001"
-    ports:
-      # Web server port
-      - "3000:3000"
-      # Web server port
-      - "3002:3002"
+    #ports:
+    #  # Web server port
+    #  - "3000:3000"
+    #  # Alternate port
+    #  - "3002:3002"
     volumes:
       - .:/app
       - ./rbenv:/home/cdodev/.rbenv
@@ -40,7 +40,7 @@ services:
     extends: web
     image: codedotorg/codedotorg-aws-access
     build:
-      dockerfile: ./headless.Dockerfile
+      dockerfile: ./dockerfiles/headless.Dockerfile
       args:
         UID: ${FIXUID:-1000}
         GID: ${FIXGID:-1000}

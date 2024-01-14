@@ -12,7 +12,7 @@ ENV TZ=America/Los_Angeles
 RUN apt-get update \
     && apt-get -y install --no-install-recommends \
     autoconf gcc g++ bison build-essential libssl-dev libyaml-dev libreadline-dev \
-    zlib1g-dev libncurses-dev libffi-dev git chromium-browser parallel
+    zlib1g-dev libncurses-dev libffi-dev git parallel debian-archive-keyring
 
 # Set the non-root user for the container and switch
 ARG UID
@@ -124,3 +124,14 @@ RUN cd /app/src \
     && RAILS_ENV=development bundle install \
     && sudo cp -r /home/${USERNAME}/.rbenv /opt/base-rbenv \
     && sudo chown -R ${USERNAME} /opt/base-rbenv
+
+# Add extra files
+
+# This adds a version of Chromium that is useful for ARM machines
+COPY dockerfiles/debian-stable.list /etc/apt/sources.list.d/.
+
+# This ensures that chrome is installed via the other repository
+COPY dockerfiles/debian-chromium /etc/apt/preferences.d/debian-chromium
+
+# Finally re-sync repository list
+RUN sudo apt update
