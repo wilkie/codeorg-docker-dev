@@ -30,9 +30,6 @@ RUN sudo -E apt-get -y install --no-install-recommends libmagickwand-dev imagema
 # MySQL Dependencies
 RUN sudo -E apt-get -y install --no-install-recommends cmake wget libaio-dev
 
-# Needed dependencies in order to VNC into the container
-#RUN sudo -E apt-get -y install xvfb x11vnc firefox
-
 # Build and Install MySQL Native Client
 RUN cd /home/${USERNAME} \
     && wget https://downloads.mysql.com/archives/get/p/23/file/mysql-${MYSQL_VERSION}.tar.gz \
