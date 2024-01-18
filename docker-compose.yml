@@ -23,7 +23,7 @@ services:
       - db
       - minio
     working_dir: /app/src
-    #command: ./bin/dashboard-server
+    command: /bin/bash -i -c "./bin/dashboard-server"
     networks:
       - cdo_network
     profiles:
@@ -191,9 +191,26 @@ services:
         soft: "65536"
         hard: "65536"
 
+  # Runs a command on the database server
+  db-command:
+    extends: db
+    container_name: db-remote
+    hostname: db-remote
+    depends_on:
+      db:
+        condition: service_started
+    command: /bin/bash -ic 'mysql db --password=password --user=root --host=db'
+    profiles:
+      - web
+    networks:
+      - cdo_network
+
   # Runs a database console session
   db-console:
     extends: web
+    depends_on:
+      db:
+        condition: service_started
     command: ./bin/mysql-client-admin
     profiles:
       - db-console

@@ -17,50 +17,71 @@ The Code<span>.org Docker dev environment uses docker compose to create two cont
 
 The web container runs all of the code required for dashboard and pegasus. All of the source code is stored on the host laptop under the "src" sub-directory.
 
-The db container runs MySQL 5.7. All of the data files for MySQL are stored on the host laptop using the "data" sub-directory.
+The db container runs the same version of MySQL as production. All of the data files for MySQL are stored on the host laptop using the "data" sub-directory.
 
-Docker networking provides a connection between the two containers. The db container exposes port 3306 for MySQL access to the web container.
+Docker networking provides a connection between the two containers. Much of this is handled internally. For instance, the db container exposes port 3306 for MySQL access to the web container.
 
 <img src="./containers.png" width=400>
 
 ## Pre-requisite: Docker Desktop
+
 The only pre-requisite you need on your host laptop is Docker desktop.  If you don't have it already installed and running, you can download it [here](https://www.docker.com/products/docker-desktop/). 
 
 If you are on a Linux machine, you can follow the instructions [here](https://docs.docker.com/desktop/install/linux-install/). Also, ensure you can run Docker as a non-root user, following [these instructions](https://docs.docker.com/engine/install/linux-postinstall/).
 
-Note: This repo has been tested using Docker version 20.10.9.
+You will need to ensure that `docker compose` is usable in your install.
+Occasionally the `compose` features are installed separately.
 
-To get everything setup, follow these steps:
+Note: This repo has been tested using Docker versions as low as 20.10.17 and as new as 24.0.6.
 
-## Step 1: Build and run the containers
-- Open a terminal and clone this repo:
-	- ```git clone git@github.com:wilkie/codeorg-docker-dev.git```
-- Within this directory, git clone the Code<span>.org repository as a sub-directory called src:
-	- ```cd codeorg-docker-dev```
-	- ```git clone git@github.com:code-dot-org/code-dot-org.git src```
-- Apply the included patch
-    - ```cd src```
-    - ```patch -p1 < ../0001-Offline-updates.patch```
-- The next steps are manual steps if the included patch fails.
-    - Edit src/Gemfile:
-        - Update unf_ext from 0.0.7.2 to 0.0.8
-        - Add gem 'tzinfo-data' (this is required for db seeding in containers)
-        - If you are using an M1 Mac/ARM-based machine, add gem 'libv8-node', '~> 16.10.0.0'
-        - if you want debugging support, add gems 'ruby-debug-ide' and 'debase'
-    - Edit src/Gemfile.lock:
-        - Update unf_ext from 0.0.7.2 to 0.0.8
-            - If you are using an M1 Mac/ARM-based machine, remove any reference to mini_racer and it's libv8 dependency.
-    - Edit src/config/development.yml.erb
-        - Set db_writer to ```'mysql://root:password@db/'``` (this points the development environment to the db container vs. the local machine).
-- Build the containers:
-    - macOS host: ```docker compose build```
-	- Linux host: ```FIXUID=$(id -u) FIXGID=$(id -g) docker compose build```
-- Run the containers:
-	- ```docker compose up```
+## Step 1: The `cdo` command and Setup
 
-If everything starts fine, you should see ```mysqld: ready for connections.``` You'll then need to open a new terminal window/tab to continue with the rest of the setup.
+All functions you may wish to apply to the code-dot-org project are encapsulated neatly in the provided "`cdo`" binary.
+To use, simply try poking around its own documentation:
 
-## Step 2: Configure AWS credentials
+```
+# In the base directory
+./cdo
+```
+
+And to get a listing of commands:
+
+```
+./cdo help
+```
+
+And help on a specific command:
+
+```
+./cdo help init
+```
+
+To put our directory in your `PATH` and simply use `cdo` wherever, run the `init` command:
+
+```
+./cdo init
+```
+
+Now you can, from any point in the repository space, just run the `cdo` command.
+
+## Step 2: Install
+
+Run the install command to build the containers and install the libraries.
+
+This does the work primarily done by the `rake install` steps.
+
+```
+cdo install
+```
+
+## Optional Step: Configure AWS credentials
+
+For code.org developers, special access and logging is done via their AWS credentials.
+
+You do not need AWS access to contribute to the codebase. By default, the install step
+will write a configuration that assumes you do not have any access. However, you may
+go through the process of generating your credentials anyway.
+
 - Ensure $HOME/.aws-docker on your host laptop contains valid AWS credentials. You probably already have this setup, but if you don't, you can find instructions [here](https://docs.google.com/document/d/1dDfEOhyyNYI2zIv4LI--ErJj6OVEJopFLqPxcI0RXOA/edit#heading=h.nbv3dv2smmks).
 - Connect to the web container:
 	- ```docker exec -ti web bash```
@@ -72,48 +93,35 @@ If everything starts fine, you should see ```mysqld: ready for connections.``` Y
 	- ```export OAUTH_CODE=copied value```
 	- (If you close the terminal window or restart the containers, you'll need to repeat this)
 
-## Step 3: Seed the db, build, and run the server
-- From the ```/app/src``` directory, rake install:
-	- ```bundle exec rake install```
-- Rake build:
-	- ```bundle exec rake build```
-- Run the dashboard server script:
-	- ```bin/dashboard-server```
-- Open a web browser and browse to http://localhost-studio.code.org:3000
+## Step 3: Build
+
+Use the `build` command:
+
+This performs the `rake build` within the web container.
+
+```
+cdo build
+```
 
 ## Step 4: Running tests
-To run pegasus and dashboard tests:
 
-- Edit src/config/test.yml.erb
-	- Set db_writer to ```'mysql://root:password@db/'``` (this points to the db running in the other container).
-- Create the Pegasus test db and run the Pegasus tests:
-	- ```cd /app/src/pegasus```
-	- ```RAILS_ENV=test bundle exec rake test:reset_dependencies```
-	- ```RAILS_ENV=test bundle exec rake test```
-- Create the Dashboard test db and run the test suite:
-	- ```cd /app/src/dashboard```
-	- ```UTF8=1 RAILS_ENV=test bundle exec rake db:reset db:test:prepare```
-	- ```RAILS_ENV=test bundle exec rake assets:precompile```
-	- Make sure all spring processes have been stopped.
-	- ```RAILS_ENV=test bundle exec rails test```
-
-## Optional: Exposing MySQL (on port 3306) to the host
-If you have a MySQL client on your host laptop (e.g., JetBrains Datagrip or SQLPro), you can also connect directly to the MySQL database running in the db container.
-
-To do this, edit your docker-compose.yml file and add the following section in the db configuration:
+To run pegasus tests:
 
 ```
-ports:
-  - "3306:3306"
+cdo test:pegasus
+cdo test:pegasus test_forms.rb # Optionally, supply a file within pegasus/test
 ```
 
-Stop and restart the containers, and your db container will now be accessible on localhost:3306. Use the credentials specified in the docker-compose.yml file.
-
-Note: The db container will fail to start if you already have an existing MySQL installation on your host laptop (as port 3306 will already be in use). To overcome this, either uninstall MySQL on the host, or bind to a port other than 3306:
+To run dashboard unit tests:
 
 ```
-ports:
-  - "3307:3306"
+cdo test:unit
+```
+
+To run dashboard UI tests:
+
+```
+cdo test:ui
 ```
 
 ## Optional: Run/Debug Dashboard and Pegasus (RubyMine)
@@ -145,7 +153,6 @@ To run the rails console from within RubyMine:
 
 - Select Run Rails Console...
 - If the console fails, edit the newly created rails console configuration and add the "AWS_PROFILE=cdo" environment var.
-
 
 ## Optional: Run/Debug Dashboard and Pegasus (VS Code)
 

@@ -18,6 +18,14 @@ RUN apt-get update \
     autoconf gcc g++ bison build-essential libssl-dev libyaml-dev libreadline-dev \
     zlib1g-dev libncurses-dev libffi-dev git parallel debian-archive-keyring
 
+# Set the locale
+RUN apt-get -y install locales
+RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && \
+    locale-gen
+ENV LANG en_US.UTF-8  
+ENV LANGUAGE en_US:en  
+ENV LC_ALL en_US.UTF-8 
+
 # Set the non-root user for the container and switch
 ARG UID
 ARG GID

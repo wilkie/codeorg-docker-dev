@@ -9,6 +9,7 @@ fi
 
 COMPOSE_CMD='docker compose --progress quiet'
 RUN_CMD='run --rm'
+BUILD_CMD='build'
 EXEC_CMD='exec'
 
 # Ensure we are within SCRIPT_DIR
@@ -45,7 +46,16 @@ usage()
 
 run()
 {
+  LOUD=
+  # '-L': This disables the compose flags that silence the messages about
+  # starting/stopping services
+  if [ ${1} == "-L" ]; then
+    LOUD=1
+    shift
+  fi
+
   QUIET=
+  # '-q': This silences our own printing of the command that is about to run.
   if [ ${1} == "-q" ]; then
     QUIET=1
     shift
@@ -57,6 +67,8 @@ run()
     COMPOSE_SUB_CMD_WITH_ARGS=${RUN_CMD}
   elif [ ${1} == "exec" ]; then
     COMPOSE_SUB_CMD_WITH_ARGS=${EXEC_CMD}
+  elif [ ${1} == "build" ]; then
+    COMPOSE_SUB_CMD_WITH_ARGS=${BUILD_CMD}
   fi
   shift
 
@@ -73,11 +85,17 @@ run()
     if [ -z ${QUIET} ]; then
       if [ "${COMPOSE_SUB_CMD}" == 'stop' ]; then
         echo "Stopping service: ${COMPOSE_NAME}"
+      elif [ "${COMPOSE_SUB_CMD}" == 'build' ]; then
+        echo "Building service: ${COMPOSE_NAME}"
       else
         echo "Running service: ${COMPOSE_NAME}"
       fi
     fi
-    ${COMPOSE_CMD} ${COMPOSE_SUB_CMD_WITH_ARGS} ${COMPOSE_SUB_ARGS} ${COMPOSE_NAME}
+    if [ -z ${LOUD} ]; then
+      ${COMPOSE_CMD} ${COMPOSE_SUB_CMD_WITH_ARGS} ${COMPOSE_SUB_ARGS} ${COMPOSE_NAME}
+    else
+      docker compose ${COMPOSE_SUB_CMD_WITH_ARGS} ${COMPOSE_SUB_ARGS} ${COMPOSE_NAME}
+    fi
   else
     if [ -z ${QUIET} ]; then
       echo "Running: [${COMPOSE_NAME}] /bin/bash -ic \"${@}\""
@@ -97,7 +115,7 @@ fi
 command=$1
 shift
 
-if [ "${command}" == "init" ]; then
+if [[ "${command}" == "init" || "${command}" == "setup" ]]; then
   echo "Initializing cdo scripts..."
   echo "- Copying bash tab completion"
   mkdir -p ~/.local/share/bash-completion/completions
@@ -153,7 +171,7 @@ else
   GENERAL[reset]="Resets the rbenv and nvm environment and reinstalls."
 fi
 
-if [[ "${command}" == "install:ruby" || "${command}" == "install" ]]; then
+if [[ "${command}" == "install:ruby" || "${command}" == "install" || "${command}" == "setup" ]]; then
   # Copy over a pre-built copy of rbenv
   if [ ! -e rbenv/versions ]; then
     run 'run' 'web' "cp -r /opt/base-rbenv/* /home/cdodev/.rbenv/."
@@ -202,7 +220,7 @@ else
   GENERAL[install:ruby]="Installs the ruby environment."
 fi
 
-if [[ "${command}" == "install:js" || "${command}" == "install" ]]; then
+if [[ "${command}" == "install:js" || "${command}" == "install" || "${command}" == "setup" ]]; then
   # Copy over a pre-built copy of nvm
   if [ ! -e nvm/package.json ]; then
     run 'run' 'web' 'cp -r /opt/base-nvm/* /home/cdodev/.nvm/.'
@@ -219,13 +237,51 @@ else
   GENERAL[install:js]="Installs JavaScript libraries."
 fi
 
-if [ "${command}" == "install" ]; then
-  command="setup"
-else
+if [ "${command}" != "install" ]; then
   GENERAL[install]="Installs all."
 fi
 
-if [ "${command}" == "build" ]; then
+if [[ "${command}" == "db:setup" || "${command}" == "setup" ]]; then
+  echo "Setting up DB"
+  ${COMPOSE_CMD} run db-command /bin/bash -i -c "mysql db --host=db --password=password -e 'ALTER DATABASE dashboard_development CHARACTER SET utf8 COLLATE utf8_unicode_ci;'"
+  ${COMPOSE_CMD} run db-command /bin/bash -i -c "mysql db --host=db --password=password -e 'ALTER DATABASE dashboard_test CHARACTER SET utf8 COLLATE utf8_unicode_ci;'"
+
+  # Bail out if this is the exact thing requested.
+  if [ "${command}" == "db:setup" ]; then
+    exit $?
+  fi
+else
+  GENERAL[db:setup]="Sets up the database configuration."
+fi
+
+if [[ "${command}" == "build:docker" || "${command}" == "setup" ]]; then
+  if [ ! -z ${1} ]; then
+    set +e
+    run '-L' 'build' ${@} 'web'
+    CODE=$?
+    if [ ${CODE} == 0 ]; then
+      run '-L' 'build' ${@} 'test'
+      CODE=$?
+    fi
+    set -e
+    if [ ${CODE} != 0 ]; then
+      echo "Error: Could not build."
+      echo
+      echo "This might mean something stale in the apt packages."
+      echo "You could try to invoke directly with the \`--no-cache\` option:"
+      echo
+      echo "cdo build:docker --no-cache"
+      exit 1
+    fi
+  else
+    run '-L' 'build' 'web'
+    run '-L' 'build' 'test'
+  fi
+else
+  GENERAL[build:docker]="Builds the docker containers."
+fi
+
+if [[ "${command}" == "build" || "${command}" == "setup" ]]; then
   if [ ! -e rbenv/versions ]; then
     echo "You need to install first. Run `cdo install`"
     exit 1
@@ -233,7 +289,11 @@ if [ "${command}" == "build" ]; then
 
   # Rake build
   run 'run' 'web' 'bundle exec rake build'
-  exit $?
+
+  # Bail out if this is the exact thing requested.
+  if [ "${command}" == "build" ]; then
+    exit $?
+  fi
 else
   GENERAL[build]="Builds all things."
 fi
@@ -249,6 +309,16 @@ if [ "${command}" == "build:js" ]; then
   exit $?
 else
   GENERAL[build:js]="Builds the JavaScript."
+fi
+
+if [ "${command}" == "setup" ]; then
+  echo "Setup complete successfully."
+  echo
+  echo "You can see help for other possible commands with \`cdo help\`"
+  echo
+  echo "You can run the server with \`cdo server\` which will run the server on port 3000"
+else
+  GENERAL[setup]="Does the complete project setup."
 fi
 
 if [ "${command}" == "dcdo:list" ]; then
@@ -332,7 +402,7 @@ if [ "${command}" == "stop" ]; then
   if [[ ! -z ${1} ]]; then
     docker compose stop ${@}
   else
-    ${COMPOSE_CMD} down --remove-orphans
+    docker compose down --remove-orphans
   fi
   exit $?
 else
@@ -346,22 +416,19 @@ else
   GENERAL[shell]="Drop into an interactive shell in the web server machine."
 fi
 
-if [ "${command}" == "setup" ]; then
-  echo "Setting up DB"
-  ${COMPOSE_CMD} exec db /bin/bash -i -c "mysql db --password=password -e 'ALTER DATABASE dashboard_development CHARACTER SET utf8 COLLATE utf8_unicode_ci;'"
-  ${COMPOSE_CMD} exec db /bin/bash -i -c "mysql db --password=password -e 'ALTER DATABASE dashboard_test CHARACTER SET utf8 COLLATE utf8_unicode_ci;'"
-  exit $?
-else
-  GENERAL[setup]="."
-fi
-
 if [ "${command}" == "server" ]; then
   run 'stop' 'server'
   if [ "${1}" == "-d" ]; then
     echo "Running server in the background..."
+    echo
+    echo "When it is ready, you can view it at:"
+    echo "http://localhost-studio.code.org:3000"
     run 'up' '-d' server
   else
     echo "Running server in the foreground"
+    echo
+    echo "When it is ready, you can view it at:"
+    echo "http://localhost-studio.code.org:3000"
     run 'run' '-i --service-ports' 'server'
   fi
   exit $?
