@@ -6,22 +6,15 @@ services:
     hostname: web
     image: codedotorg/codedotorg-web
     build:
-      dockerfile: ./dockerfiles/web.Dockerfile
+      dockerfile: ./dockerfiles/Dockerfile
+      target: cdo-web
       args:
         UID: ${FIXUID:-1000}
         GID: ${FIXGID:-1000}
     cap_add:
       - SYS_PTRACE
-    #ports:
-      # Storybooks
-      #- "9001:9001"
-    #ports:
-    #  # Web server port
-    #  - "3000:3000"
-    #  # Alternate port
-    #  - "3002:3002"
     volumes:
-      - .:/app
+      - ./src:/app/src
       - ./rbenv:/home/cdodev/.rbenv
       - ./nvm:/home/cdodev/.nvm
       - $HOME/.aws-docker:/home/cdodev/.aws
@@ -101,10 +94,19 @@ services:
     container_name: test-web
     hostname: test-web
     extends: web
+    build:
+      dockerfile: ./dockerfiles/Dockerfile
+      target: cdo-test
+      args:
+        UID: ${FIXUID:-1000}
+        GID: ${FIXGID:-1000}
+    expose:
+      - "3000"
     environment:
       # Ensure the local selenium is used
       SELENIUM_HOST: selenium
       SELENIUM_URL: 'http://selenium:4444/wd/hub'
+      RAILS_ENV: test
     command: /bin/bash -i -c "./bin/dashboard-server"
     healthcheck:
       test: "curl --fail http://localhost:3000"
@@ -112,8 +114,6 @@ services:
       retries: 100
       start_period: 30s
       timeout: 10s
-    expose:
-      - "3000"
     profiles:
       - test
     networks:
@@ -123,20 +123,44 @@ services:
           - localhost-studio.code.org
           - localhost-hourofcode.org
 
+  test-server:
+    extends: test
+    command: /bin/bash -i -c "./bin/dashboard-server"
+    ports:
+      # Web server port
+      - "3000:3000"
+    profiles:
+      - test
+
+  unit-tests:
+    extends: test
+    command: /bin/bash -ic 'bundle exec spring testunit'
+    profiles:
+      - test
+    networks:
+      - cdo_network_test
+
   ui-tests:
-    extends: web
+    extends: test
     command: /bin/bash -ic 'bundle exec rake test:ui'
     environment:
       # Ensure the local selenium is used
       SELENIUM_HOST: selenium
       SELENIUM_URL: 'http://selenium:4444/wd/hub'
     depends_on:
-      - selenium
-      - test
+      selenium:
+        condition: service_started
+      test:
+        condition: service_healthy
     profiles:
       - test
     networks:
       - cdo_network_test
+
+  js-tests:
+    extends: test
+    working_dir: /app/src/apps
+    command: /bin/bash -ic 'yarn test:unit --browser=FirefoxHeadless'
 
   # mysql 5.7.30
   # Internally exposes 3306 to other containers as 'db'
@@ -160,6 +184,12 @@ services:
     networks:
       - cdo_network
       - cdo_network_test
+    # Many default ulimits are just too high
+    # And, so, it will consume way too much memory (16GB+)
+    ulimits:
+      nofile:
+        soft: "65536"
+        hard: "65536"
 
   # Runs a database console session
   db-console:
@@ -193,8 +223,8 @@ services:
     container_name: minio
     hostname: minio
     # Uncomment for x86:
-    #image: minio/minio:RELEASE.2021-07-30T00-02-00Z
-    image: pixelchrome/minio-arm:latest-arm32v7
+    image: minio/minio:RELEASE.2021-07-30T00-02-00Z
+    #image: pixelchrome/minio-arm:latest-arm32v7
     ports:
       - "9000:9000"
       - "3001:3001"

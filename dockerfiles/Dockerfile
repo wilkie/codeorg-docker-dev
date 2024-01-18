@@ -1,5 +1,8 @@
+# Web Environment
+# ----------------
+
 # Ubuntu 20.04
-FROM ubuntu:focal
+FROM ubuntu:focal AS cdo-web
 
 ARG USERNAME=cdodev
 
@@ -10,6 +13,7 @@ ENV TZ=America/Los_Angeles
 
 # Additional required packages
 RUN apt-get update \
+    && apt-get -y install --no-install-recommends ca-certificates \
     && apt-get -y install --no-install-recommends \
     autoconf gcc g++ bison build-essential libssl-dev libyaml-dev libreadline-dev \
     zlib1g-dev libncurses-dev libffi-dev git parallel debian-archive-keyring
@@ -132,3 +136,11 @@ COPY dockerfiles/debian-chromium /etc/apt/preferences.d/debian-chromium
 
 # Finally re-sync repository list
 RUN sudo apt update
+
+# Test Environment
+# ----------------
+
+FROM cdo-web AS cdo-test
+
+RUN sudo apt update
+RUN sudo apt install -y libgl1-mesa-dev libosmesa6-dev libpci-dev firefox --no-install-recommends

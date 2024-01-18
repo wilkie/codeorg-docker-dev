@@ -1,32 +1,29 @@
-From bfb82878b86798de732b8263bc1f15a1c790d18d Mon Sep 17 00:00:00 2001
+From 473b01d33094f7584a198a5cdb6a2f3043546431 Mon Sep 17 00:00:00 2001
 From: wilkie <wilkie05@gmail.com>
-Date: Fri, 22 Sep 2023 13:13:12 -0700
-Subject: [PATCH] Allows SELENIUM_URL to target a remote selenium instance.
+Date: Mon, 15 Jan 2024 20:31:45 -0500
+Subject: [PATCH] Allows remote testing via SELENIUM_URL.
 
-This is useful for docker environments where you might spawn a docker
-container for selenium via docker compose, e.g.
 ---
- dashboard/test/ui/features/support/connect.rb | 3 ++-
+ dashboard/test/ui/features/support/connect.rb | 2 +-
  dashboard/test/ui/runner.rb                   | 2 +-
  dashboard/test/ui/utils/selenium_browser.rb   | 8 +++++++-
- 3 files changed, 10 insertions(+), 3 deletions(-)
+ 3 files changed, 9 insertions(+), 3 deletions(-)
 
 diff --git a/dashboard/test/ui/features/support/connect.rb b/dashboard/test/ui/features/support/connect.rb
-index e6e26170fa2..18c9cd6e739 100644
+index 4f8e4f4f6c0..028fb126541 100644
 --- a/dashboard/test/ui/features/support/connect.rb
 +++ b/dashboard/test/ui/features/support/connect.rb
-@@ -60,7 +60,8 @@ def get_browser(test_run_name)
+@@ -60,7 +60,7 @@ def get_browser(test_run_name)
    browser = nil
    if ENV['TEST_LOCAL'] == 'true'
      headless = ENV['TEST_LOCAL_HEADLESS'] == 'true'
--    browser = SeleniumBrowser.local(headless, ENV['BROWSER_CONFIG'])
-+
-+    browser = SeleniumBrowser.local(headless, ENV['BROWSER_CONFIG'], ENV['SELENIUM_URL'])
+-    browser = SeleniumBrowser.local(browser: ENV['BROWSER_CONFIG'], headless: headless)
++    browser = SeleniumBrowser.local(browser: ENV['BROWSER_CONFIG'], headless: headless, selenium_url: ENV['SELENIUM_URL'])
    else
      browser = Retryable.retryable(tries: MAX_CONNECT_RETRIES) do
        saucelabs_browser(test_run_name)
 diff --git a/dashboard/test/ui/runner.rb b/dashboard/test/ui/runner.rb
-index 5deea2bcd82..637853879b6 100755
+index ca22f5cb5c3..6b2a63fbaa3 100755
 --- a/dashboard/test/ui/runner.rb
 +++ b/dashboard/test/ui/runner.rb
 @@ -138,7 +138,7 @@ def parse_options
@@ -39,15 +36,15 @@ index 5deea2bcd82..637853879b6 100755
          options.pegasus_domain = 'localhost.code.org:3000'
          options.dashboard_domain = 'localhost-studio.code.org:3000'
 diff --git a/dashboard/test/ui/utils/selenium_browser.rb b/dashboard/test/ui/utils/selenium_browser.rb
-index add4047ea9b..d8adaea7b7f 100644
+index 2289aeb681f..e07bdc5c4e8 100644
 --- a/dashboard/test/ui/utils/selenium_browser.rb
 +++ b/dashboard/test/ui/utils/selenium_browser.rb
 @@ -2,7 +2,7 @@ require 'selenium/webdriver'
  require 'webdrivers'
  
  module SeleniumBrowser
--  def self.local(headless = true, browser = :chrome)
-+  def self.local(headless = true, browser = :chrome, selenium_url = nil)
+-  def self.local(browser: :chrome, headless: true)
++  def self.local(browser: :chrome, headless: true, selenium_url: nil)
      browser = browser.to_sym
      options = {}
      case browser
@@ -65,5 +62,5 @@ index add4047ea9b..d8adaea7b7f 100644
    end
  
 -- 
-2.30.2
+2.42.0
 

@@ -4,7 +4,17 @@ set -e
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 CMD_NAME=${0}
 if [[ ${0} == /* ]]; then
-    CMD_NAME=cdo
+  CMD_NAME=cdo
+fi
+
+COMPOSE_CMD='docker compose --progress quiet'
+RUN_CMD='run --rm'
+EXEC_CMD='exec'
+
+# Ensure we are within SCRIPT_DIR
+if [[ "${PWD}" != ${SCRIPT_DIR}* ]]; then
+  echo "Error: Must be within the docker root: ${SCRIPT_DIR}"
+  exit 1
 fi
 
 # Keep track of the commands the script supports
@@ -16,197 +26,577 @@ declare -A MAINTENANCE
 declare -A INTERACTIVE
 declare -A TESTING
 
-if [[ "$#" -le 0 || $1 == "help" ]]; then
-    echo "Usage: ${CMD_NAME} <command> [<...args>]"
-    echo "List commands: ${CMD_NAME} help"
+# Add help command
+GENERAL[help]="Displays information about commands."
+GENERAL[help:args]="[COMMAND]"
 
-    if [[ ${1} != "help" ]]; then
-        exit 0
+usage()
+{
+  SUB_CMD_NAME=$1
+  : ${SUB_CMD_NAME:='<command>'}
+  ARGS=$2
+  : ${ARGS:='[<...args>]'}
+  echo "Usage: ${CMD_NAME} ${SUB_CMD_NAME} ${ARGS}"
+
+  if [ -z $1 ]; then
+    echo "List commands: ${CMD_NAME} help"
+  fi
+}
+
+run()
+{
+  QUIET=
+  if [ ${1} == "-q" ]; then
+    QUIET=1
+    shift
+  fi
+
+  COMPOSE_SUB_CMD=$1
+  COMPOSE_SUB_CMD_WITH_ARGS=$1
+  if [ ${1} == "run" ]; then
+    COMPOSE_SUB_CMD_WITH_ARGS=${RUN_CMD}
+  elif [ ${1} == "exec" ]; then
+    COMPOSE_SUB_CMD_WITH_ARGS=${EXEC_CMD}
+  fi
+  shift
+
+  COMPOSE_SUB_ARGS=
+  if [[ ! -z ${1} && ${1} == -* ]]; then
+    COMPOSE_SUB_ARGS=${1}
+    shift
+  fi
+
+  COMPOSE_NAME=${1}
+  shift
+
+  if [ -z "${1}" ]; then
+    if [ -z ${QUIET} ]; then
+      if [ "${COMPOSE_SUB_CMD}" == 'stop' ]; then
+        echo "Stopping service: ${COMPOSE_NAME}"
+      else
+        echo "Running service: ${COMPOSE_NAME}"
+      fi
     fi
+    ${COMPOSE_CMD} ${COMPOSE_SUB_CMD_WITH_ARGS} ${COMPOSE_SUB_ARGS} ${COMPOSE_NAME}
+  else
+    if [ -z ${QUIET} ]; then
+      echo "Running: [${COMPOSE_NAME}] /bin/bash -ic \"${@}\""
+    fi
+    ${COMPOSE_CMD} ${COMPOSE_SUB_CMD_WITH_ARGS} ${COMPOSE_SUB_ARGS} ${COMPOSE_NAME} /bin/bash -ic "${@}"
+  fi
+}
+
+if [[ "$#" -le 0 ]]; then
+  usage
+
+  if [[ ${1} != "help" ]]; then
+    exit 0
+  fi
 fi
 
 command=$1
 shift
 
 if [ "${command}" == "init" ]; then
-    echo "Initializing cdo scripts..."
-    echo "- Copying bash tab completion"
-    mkdir -p ~/.local/share/bash-completion
-    cp ${SCRIPT_DIR}/cdo-completion.bash ~/.local/share/bash-completion
+  echo "Initializing cdo scripts..."
+  echo "- Copying bash tab completion"
+  mkdir -p ~/.local/share/bash-completion/completions
+  cp ${SCRIPT_DIR}/cdo-completion.bash ~/.local/share/bash-completion/completions/cdo
 
-    if [[ -f ~/.bashrc ]]; then
-        if [[ -z `grep "Code.org Repository " ~/.bashrc` ]]; then
-            echo "- Adding cdo script binary to the PATH in bashrc"
-            echo "# Code.org Repository (cdo) binary path:" >> ~/.bashrc
-            echo "export PATH=\${PATH}:${SCRIPT_DIR}" >> ~/.bashrc
-        else
-            echo "- Not adding cdo script binary to the PATH in bashrc... already there"
-        fi
+  if [[ -f ~/.bashrc ]]; then
+    if [[ -z `grep "Code.org Repository " ~/.bashrc` ]]; then
+      echo "- Adding cdo script binary to the PATH in bashrc"
+      echo "# Code.org Repository (cdo) binary path:" >> ~/.bashrc
+      echo "export PATH=\${PATH}:${SCRIPT_DIR}" >> ~/.bashrc
+      echo "- To use it immediately, run `source ~/.bashrc`"
+    else
+      echo "- Not adding cdo script binary to the PATH in bashrc... already there"
     fi
+  fi
 
-    echo "- Done."
-    exit $?
+  echo "- Done."
+  exit $?
+fi
+
+if [[ "${command}" == "reset:db" || "${command}" == "reset" ]]; then
+  command="install"
+else
+  GENERAL[reset:db]="Resets the database and reinstalls."
+  GENERAL[reset:db:args]=""
+fi
+
+if [ "${command}" == "reset:js" ]; then
+  if [ -d nvm ]; then
+    rm -rf nvm
+  fi
+  git checkout nvm
+  if [ "${command}" == "reset:js" ]; then
+    command="install:js"
+  fi
+else
+  GENERAL[reset:nvm]="Resets the nvm environment and reinstalls."
+fi
+
+if [[ "${command}" == "reset:ruby" || "${command}" == "reset" ]]; then
+  rm -rf rbenv
+  git checkout rbenv
+  if [ "${command}" == "reset:ruby" ]; then
+    command="install:ruby"
+  fi
+else
+  GENERAL[reset:ruby]="Resets the rbenv environment and reinstalls."
 fi
 
 if [ "${command}" == "reset" ]; then
-    rm -rf rbenv nvm
-    git checkout rbenv nvm
-    command="install"
+  command="install"
 else
-    GENERAL[reset]="This is reset."
+  GENERAL[reset]="Resets the rbenv and nvm environment and reinstalls."
 fi
 
-if [ "${command}" == "reset-nvm" ]; then
-    rm -rf nvm
-    git checkout nvm
-    command="install"
+if [[ "${command}" == "install:ruby" || "${command}" == "install" ]]; then
+  # Copy over a pre-built copy of rbenv
+  if [ ! -e rbenv/versions ]; then
+    run 'run' 'web' "cp -r /opt/base-rbenv/* /home/cdodev/.rbenv/."
+  fi
+
+  # Clone the repo
+  if [ ! -e src/locals.yml.default ]; then
+    # We /could/ use 'git' inside the container and remove that dependency, too
+    git clone https://github.com/code-dot-org/code-dot-org ${SCRIPT_DIR}/src
+  fi
+
+  # Attempt to patch SELENIUM_URL
+  pushd ${SCRIPT_DIR}/src
+  patch -p1 -N --no-backup-if-mismatch -r- < ../patches/0001-Allows-SELENIUM_URL-to-target-a-remote-selenium-inst.patch || true
+  popd
+
+  # Initialize a locals.yml
+  if [ ! -e src/locals.yml ]; then
+    cp src/locals.yml.default src/locals.yml
+    cat locals.yml.settings >> src/locals.yml
+  fi
+
+  # Bundle
+  run 'run' 'web' 'bundle install'
+
+  # Rake install
+  run 'run' 'web' 'bundle exec rake install'
+
+  # Test asset compile
+  run 'run' 'web' 'cd dashboard; RAILS_ENV=test bundle exec rake assets:precompile'
+
+  # Test dashboard db prepare
+  run 'run' 'web' 'cd dashboard; RAILS_ENV=test UTF8=1 bundle exec rake db:reset db:test:prepare'
+
+  # Test pegasus db prepare
+  run 'run' 'web' 'cd pegasus; RAILS_ENV=test bundle exec rake test:reset_dependencies'
+
+  # Ensure we generate secret words
+  run 'run' 'web' 'cd dashboard; RAILS_ENV=test bundle exec rake seed:secret_pictures seed:secret_words'
+
+  # Stop if this is all that was asked of us
+  if [ "${command}" == "install:ruby" ]; then
+    exit $?
+  fi
 else
-    GENERAL[reset-nvm]="This is reset-nvm."
+  GENERAL[install:ruby]="Installs the ruby environment."
 fi
 
-if [ "${command}" == "reset-rbenv" ]; then
-    rm -rf rbenv
-    git checkout rbenv
-    command="install"
+if [[ "${command}" == "install:js" || "${command}" == "install" ]]; then
+  # Copy over a pre-built copy of nvm
+  if [ ! -e nvm/package.json ]; then
+    run 'run' 'web' 'cp -r /opt/base-nvm/* /home/cdodev/.nvm/.'
+  fi
+
+  # Yarn install
+  run 'run' 'web' 'cd apps; yarn install; yarn add karma-firefox-launcher@^2.1.2'
+
+  # Stop if this is all that was asked of us
+  if [ "${command}" == "install:js" ]; then
+    exit $?
+  fi
 else
-    GENERAL[reset-rbenv]="This is reset-rbenv."
+  GENERAL[install:js]="Installs JavaScript libraries."
 fi
 
 if [ "${command}" == "install" ]; then
-    # Copy over a pre-built copy of rbenv
-    if [ ! -e rbenv/versions ]; then
-        docker compose run web bash -ic "cp -r /opt/base-rbenv/* /home/cdodev/.rbenv/."
-    fi
-
-    # Copy over a pre-built copy of nvm
-    if [ ! -e nvm/package.json ]; then
-        docker compose run web bash -ic "cp -r /opt/base-nvm/* /home/cdodev/.nvm/."
-    fi
-
-    # Bundle
-    docker compose run web bash -ic "bundle install"
-
-    # Rake install
-    docker compose run web bash -ic "bundle exec rake install"
-    exit $?
+  command="setup"
 else
-    GENERAL[install]="This is install."
+  GENERAL[install]="Installs all."
+fi
+
+if [ "${command}" == "build" ]; then
+  if [ ! -e rbenv/versions ]; then
+    echo "You need to install first. Run `cdo install`"
+    exit 1
+  fi
+
+  # Rake build
+  run 'run' 'web' 'bundle exec rake build'
+  exit $?
+else
+  GENERAL[build]="Builds all things."
+fi
+
+if [ "${command}" == "build:js" ]; then
+  if [ ! -e src/apps/node_modules/.bin/grunt ]; then
+    echo "You need to install first. Run `cdo install:js`"
+    exit 1
+  fi
+
+  # Yarn build
+  run 'run' 'web' 'cd apps; yarn build'
+  exit $?
+else
+  GENERAL[build:js]="Builds the JavaScript."
+fi
+
+if [ "${command}" == "dcdo:list" ]; then
+  # Quietly run the command to print the DCDO cache
+  run '-q' 'run' 'web' 'ruby -e "\$LOAD_PATH.unshift \"/app/src\"; require \"deployment\"; require \"dynamic_config/dcdo\"; puts JSON.pretty_generate(DCDO.instance_variable_get(\"@datastore_cache\").instance_variable_get(\"@local_cache\"))"'
+  exit $?
+else
+  GENERAL[dcdo:list]="Lists the currently locally set DCDO flags and their values."
+fi
+
+if [ "${command}" == "dcdo:reset" ]; then
+  # We just remove the temp json file
+  if [ -f "${SCRIPT_DIR}/src/dashboard/dcdo_development_temp.json" ]; then
+    rm "${SCRIPT_DIR}/src/dashboard/dcdo_development_temp.json"
+  fi
+  exit 0
+else
+  GENERAL[dcdo:reset]="Clears all local DCDO flags to its given value."
+fi
+
+if [ "${command}" == "dcdo:set" ]; then
+  if [ -z ${1} ]; then
+    echo "A variable name is required."
+    exit 1
+  fi
+
+  if [ -z ${2} ]; then
+    echo "A value is required."
+    exit 1
+  fi
+
+  # Quietly run the command to set the DCDO value
+  run '-q' 'run' 'web' "ruby -e '\$LOAD_PATH.unshift \"/app/src\"; require \"deployment\"; require \"dynamic_config/dcdo\"; DCDO.set(\"${1}\", ${2})'"
+  CODE=$?
+
+  if [ ${CODE} != 0 ]; then
+    echo "Error setting value."
+    exit ${CODE}
+  fi
+
+  echo "Value set."
+
+  # Check that it is or isn't in the frontend values
+  set +e
+  grep "'${1}'" "${SCRIPT_DIR}/src/lib/dynamic_config/dcdo.rb" 2> /dev/null > /dev/null
+  if [ $? != 0 ]; then
+    echo
+    echo "The given value is not found in \`lib/dynamic_config/dcdo.rb\`."
+    echo
+    echo "This value will not be seen by frontend JavaScript code unless it"
+    echo "exists within this file!"
+  fi
+  set -e
+
+  exit ${CODE}
+else
+  GENERAL[dcdo:set]="Sets the given local DCDO flag to its given value."
+fi
+
+if [ "${command}" == "dcdo:get" ]; then
+  if [ -z ${1} ]; then
+    echo "A variable name is required."
+    exit 1
+  fi
+
+  # Quietly run the command to set the DCDO value
+  run '-q' 'run' 'web' "ruby -e '\$LOAD_PATH.unshift \"/app/src\"; require \"deployment\"; require \"dynamic_config/dcdo\"; puts DCDO.get(\"${1}\", nil)'"
+  exit $?
+else
+  GENERAL[dcdo:set]="Sets the given DCDO flag to its given value."
+fi
+
+if [ "${command}" == "ps" ]; then
+  docker compose ps
+  exit $?
+else
+  GENERAL[ps]="Gives process usage of any running containers or services."
 fi
 
 if [ "${command}" == "stop" ]; then
-    if [[ ! -z ${1} ]]; then
-        docker compose stop ${@}
-    else
-        docker compose down --remove-orphans
-    fi
-    exit $?
+  if [[ ! -z ${1} ]]; then
+    docker compose stop ${@}
+  else
+    ${COMPOSE_CMD} down --remove-orphans
+  fi
+  exit $?
 else
-    GENERAL[stop]="This is stop."
+  GENERAL[stop]="Stops all containers (or any given ones.)"
 fi
 
 if [ "${command}" == "shell" ]; then
-    docker compose run --rm shell
-    exit $?
+  run 'run' 'shell'
+  exit $?
 else
-    GENERAL[shell]="Drop into an interactive shell in the web server machine."
+  GENERAL[shell]="Drop into an interactive shell in the web server machine."
 fi
 
 if [ "${command}" == "setup" ]; then
-    echo "Setting up DB"
-    docker compose exec db /bin/bash -i -c "mysql db --password=password 'ALTER DATABASE dashboard_development CHARACTER SET utf8 COLLATE utf8_unicode_ci;'"
-    docker compose exec db /bin/bash -i -c "mysql db --password=password 'ALTER DATABASE dashboard_development CHARACTER SET utf8 COLLATE utf8_unicode_ci;'"
-    docker compose exec db /bin/bash -i -c "mysql db --password=password 'ALTER DATABASE dashboard_test CHARACTER SET utf8 COLLATE utf8_unicode_ci;'"
-    exit $?
+  echo "Setting up DB"
+  ${COMPOSE_CMD} exec db /bin/bash -i -c "mysql db --password=password -e 'ALTER DATABASE dashboard_development CHARACTER SET utf8 COLLATE utf8_unicode_ci;'"
+  ${COMPOSE_CMD} exec db /bin/bash -i -c "mysql db --password=password -e 'ALTER DATABASE dashboard_test CHARACTER SET utf8 COLLATE utf8_unicode_ci;'"
+  exit $?
 else
-    GENERAL[setup]="This is setup."
+  GENERAL[setup]="."
 fi
 
 if [ "${command}" == "server" ]; then
-    docker compose stop server
-    if [ "${1}" == "-d" ]; then
-        echo "Running server in the background..."
-        docker compose up -d server
-    else
-        echo "Running server in the foreground"
-        docker compose up server
-    fi
-    exit $?
+  run 'stop' 'server'
+  if [ "${1}" == "-d" ]; then
+    echo "Running server in the background..."
+    run 'up' '-d' server
+  else
+    echo "Running server in the foreground"
+    run 'run' '-i --service-ports' 'server'
+  fi
+  exit $?
 else
-    SERVICES[server]="Run the web server in the foreground. Use '-d' to run in background."
+  SERVICES[server]="Run the web server in the foreground. Use '-d' to run in background."
 fi
 
 if [ "${command}" == "console" ]; then
-    docker compose run --rm console
-    exit $?
+  run 'run' 'console'
+  exit $?
 else
-    INTERACTIVE[console]="Drop into an interactive Ruby session for the application."
+  INTERACTIVE[console]="Drop into an interactive Ruby session for the application."
 fi
 
-if [ "${command}" == "sql" ]; then
-    docker compose run --rm db-console
-    exit $?
+if [ "${command}" == "console:db" ]; then
+  run 'run' 'db-console'
+  exit $?
 else
-    INTERACTIVE[sql]="Drop into an interactive shell within the mysql db."
-fi
-
-if [ "${command}" == "irb" ]; then
-    docker compose run --rm irb
-    exit $?
-else
-    INTERACTIVE[irb]="This is irb."
-fi
-
-if [ "${command}" == "node" ]; then
-    docker compose run --rm node
-    exit $?
-else
-    INTERACTIVE[node]="This is node."
-fi
-
-if [ "${command}" == "seed" ]; then
-    SEED=ui_test
-    if [[ ! -z ${1} ]]; then
-        SEED=${1}
-        shift
-    fi
-    docker compose run --rm seed /bin/bash -ic "cd dashboard; bundle exec rake seed:${SEED}"
-    exit $?
-else
-    MAINTENANCE[seed]="This seeds the database."
+  INTERACTIVE[console:db]="Drop into an interactive shell within the mysql db."
 fi
 
 if [ "${command}" == "migrate" ]; then
-    docker compose run --rm migrate
-    exit $?
+  run 'run' 'migrate'
+  exit $?
 else
-    MAINTENANCE[migrate]="Run all pending database migrations."
+  MAINTENANCE[migrate]="Run all pending database migrations."
 fi
 
-if [ "${command}" == "unit-tests" ]; then
-    docker compose run --rm unit-tests /bin/bash -ic "cd dashboard; bundle exec spring testunit"
-    exit $?
+if [ "${command}" == "irb" ]; then
+  run 'run' 'irb'
+  exit $?
 else
-    TESTING[unit-tests]="Run the unit tests."
+  INTERACTIVE[irb]="Open an interactive ruby shell in the web environment."
 fi
 
-if [ "${command}" == "ui-tests" ]; then
-    docker compose run --rm ui-tests /bin/bash -ic "bundle exec rake test:ui feature=${@}"
-    exit $?
+if [ "${command}" == "node" ]; then
+  run 'run' 'node'
+  exit $?
 else
-    TESTING[ui-tests]="Run the UI (features) tests."
+  INTERACTIVE[node]="Open an interactive node shell in the web environment."
 fi
 
-if [ "${command}" == "reset-test" ]; then
-    # TODO: add this command more fully (db:create... db:minimum_seed)
-    docker compose run --rm unit-tests /bin/bash -ic "cd dashboard; bundle exec rake db:drop"
-    exit $?
+if [ "${command}" == "lint:ruby" ]; then
+  ARGS=''
+  if [ ! -z "$1" ]; then
+    # Get the path relative to the repo
+    ARGS=" ${1}"
+  fi
+  ${COMPOSE_CMD} ${RUN_CMD} web /bin/bash -ic "bundle exec rubocop${ARGS}"
+  exit $?
 else
-    TESTING[reset-test]="Drop and recreate the test database (for unit tests.)"
+  TESTING[lint:ruby]="Runs the ruby 'rubocop' linter."
+  TESTING[lint:ruby:args]="file#The ruby file to lint. (default: all)#dashboard/app/models/ability.rb#[FILE:.]"
+fi
+
+if [ "${command}" == "lint:js" ]; then
+  COMMAND="cd apps; ./node_modules/.bin/eslint -c .eslintrc.js -f ./.eslintCustomMessagesFormatter.js ${@}"
+  run 'run' 'web' "${COMMAND}"
+  exit $?
+else
+  TESTING[lint:js]="Runs the JavaScript 'eslint' linter."
+  TESTING[lint:js:args]="file#The JavaScript file to lint. (default: all)#apps/src/JsInterpreterLogger.js#[FILE:apps]"
+fi
+
+if [ "${command}" == "lint:shared-js" ]; then
+  COMMAND="cd shared/js; ../../apps/node_modules/eslint/bin/eslint.js ${@}"
+  run 'run' 'web' "${COMMAND}"
+  exit $?
+else
+  TESTING[lint:shared-js]="Runs the JavaScript 'eslint' linter on a shared JS file."
+  TESTING[lint:shared-js:args]="file#The JavaScript file to lint. (default: all)#details-polyfill/details-polyfill.js#[FILE:shared/js]"
+fi
+
+if [ "${command}" == "lint:haml" ]; then
+  COMMAND="bundle exec haml-lint ${@}"
+  run 'run' 'web' "${COMMAND}"
+  exit $?
+else
+  TESTING[lint:haml]="Runs the Haml 'haml-lint' linter on a haml file."
+  TESTING[lint:haml:args]="file#The Haml file to lint. (default: all)##[FILE:.]"
+fi
+
+if [ "${command}" == "lint:scss" ]; then
+  ARGS=''
+  if [ ! -z "$1" ]; then
+    # Get the path relative to the ./pegasus/test path in the container itself
+    ARGS=" ./dashboard/app/assets/stylesheets/${1}"
+  fi
+  COMMAND="bundle exec scss-lint${ARGS}"
+  run 'run' 'web' "${COMMAND}"
+  exit $?
+else
+  TESTING[lint:scss]="Runs the SCSS 'scss-lint' linter on a scss file."
+  TESTING[lint:scss:args]="file#The SCSS file to lint. (default: all)##[FILE:dashboard/app/assets/stylesheets]"
+fi
+
+if [ "${command}" == "lint:styles" ]; then
+  ARGS=''
+  if [ ! -z "$1" ]; then
+    # Get the path relative to the ./pegasus/test path in the container itself
+    ARGS=" ${1}"
+  fi
+  COMMAND="cd apps; ./node_modules/.bin/stylelint --config stylelint.config.js${ARGS}"
+  run 'run' 'web' "${COMMAND}"
+  exit $?
+else
+  TESTING[lint:styles]="Runs the JavaScript-side SCSS 'stylelint' linter on a scss file."
+  TESTING[lint:styles:args]="file#The SCSS file to lint. (default: all)##[FILE:apps]"
+fi
+
+if [ "${command}" == "lint:precommit" ]; then
+  run 'run' 'web' '/bin/bash tools/hooks/pre-commit'
+  exit $?
+else
+  TESTING[lint:precommit]="Runs linters on files currently added to the next commit."
+fi
+
+if [ "${command}" == "seed" ]; then
+  SEED=ui_test
+  if [[ ! -z ${1} ]]; then
+    SEED=${1}
+    shift
+  fi
+  run 'run' 'seed' "cd dashboard; bundle exec rake seed:${SEED}"
+  exit $?
+else
+  MAINTENANCE[seed]="This seeds the database."
+fi
+
+if [ "${command}" == "test:pegasus" ]; then
+  ARGS=''
+  if [ ! -z "$1" ]; then
+    # Get the path relative to the ./pegasus/test path in the container itself
+    ARGS=" TEST=test/${1}"
+  fi
+  run 'run' 'test' "cd pegasus; rake test${ARGS}"
+  exit $?
+else
+  TESTING[test:pegasus]="Run the Pegasus tests."
+  TESTING[test:pegasus:args]="file#The pegasus test file to run. (default: all)#test_hoc_routes.rb#[FILE:pegasus/test]"
+fi
+
+if [ "${command}" == "test:shared" ]; then
+  ARGS=''
+  if [ ! -z "$1" ]; then
+    # Get the path relative to the ./shared path in the container itself
+    ARGS=" ./test/"
+  fi
+  run 'run' 'test' "cd shared; bundle exec ruby -Itest${ARGS}"
+  exit $?
+else
+  TESTING[test:shared]="Run the shared tests."
+  TESTING[test:shared:args]="file#The shared test file to run. (default: all)#test_cdo.rb#[FILE:shared/test]"
+fi
+
+if [ "${command}" == "test:js" ]; then
+  ARGS=''
+  if [ ! -z "$1" ]; then
+    # Check that the file exists
+    if [ ! -f ${SCRIPT_DIR}/src/apps/test/${1} ]; then
+      echo "Error: Test not found in: ${SCRIPT_DIR}/src/apps/test/${1}"
+      exit 1
+    fi
+
+    # Get the path relative to the ./apps path in the container itself
+    ARGS=" --entry=./test/${1}"
+  fi
+  run 'run' 'js-tests' "yarn test:unit --browser=FirefoxHeadless${ARGS}"
+  exit $?
+else
+  TESTING[test:js]="Run the JavaScript unit tests."
+  TESTING[test:js:args]="file#The JavaScript test file to run. (default: all)#unit/templates/BaseDialogTest.jsx#[FILE:apps/test]"
+fi
+
+if [ "${command}" == "test:unit" ]; then
+  ARGS=''
+  if [ ! -z "$1" ]; then
+    # Check that the file exists
+    if [ ! -f ${SCRIPT_DIR}/src/dashboard/test/${1} ]; then
+      echo "Error: Test not found in: ${SCRIPT_DIR}/src/dashboard/test/${1}"
+      exit 1
+    fi
+
+    # Get the path relative to the dashboard path in the container itself
+    ARGS=" ./test/${1}"
+    shift
+  fi
+  COMMAND="cd dashboard; bundle exec spring testunit${ARGS} ${@}"
+  run 'run' 'unit-tests' "${COMMAND}"
+  exit $?
+else
+  TESTING[test:unit]="Run the dashboard unit tests."
+  TESTING[test:unit:args]="file#The unit test file to run. (default: all)#lib/account_purger_test.rb#[FILE:dashboard/test]"
+fi
+
+if [ "${command}" == "test:ui" ]; then
+  ARGS="test:regular_ui"
+  if [ ! -z ${1} ]; then
+    ARGS="test:ui feature=./dashboard/test/ui/features/${@}"
+  fi
+  run 'run' 'ui-tests' "bundle exec rake ${ARGS}"
+  exit $?
+else
+  TESTING[test:ui]="Run the UI (features) tests."
+  TESTING[test:ui:args]="file#The UI test file to run. (default: all)#platform/policy_compliance.feature#[FILE:dashboard/test/ui/features]"
+fi
+
+if [ "${command}" == "test:server" ]; then
+  run 'stop' 'test test-server'
+  if [ "${1}" == "-d" ]; then
+    echo "Running test server in the background..."
+    run 'up' '-d' 'test-server'
+  else
+    echo "Running test server in the foreground"
+    run 'run' '-i --service-ports' 'test-server'
+  fi
+  exit $?
+else
+  SERVICES[test:server]="Run the test environment web server in the foreground. Use '-d' to run in background."
+fi
+
+if [ "${command}" == "reset:test" ]; then
+  # TODO: add this command more fully (db:create... db:minimum_seed)
+  run 'run' 'unit-tests' 'cd dashboard; bundle exec rake db:drop'
+  exit $?
+else
+  TESTING[reset:test]="Drop and recreate the test database (for unit tests.)"
 fi
 
 # Detect that we need help! (We entered an unknown command)
 if [ "${command}" != "help" ]; then
-    echo "'${command}' is not a known command."
+  echo "'${command}' is not a known command."
+  echo
+  usage
+  exit 1
 fi
 
 declare -A CATEGORIES
@@ -216,30 +606,99 @@ CATEGORIES[Maintenance]="MAINTENANCE"
 CATEGORIES[Testing]="TESTING"
 CATEGORIES[Interactive]="INTERACTIVE"
 
-# First, determine the longest command (so we can tab things over)
-MAX_COMMAND_LENGTH=1
-for category in "${!CATEGORIES[@]}"; do
+# 'help <cmd>'
+if [ ! -z $1 ]; then
+  # Find command
+  found=0
+  for category in "${!CATEGORIES[@]}"; do
     name="${CATEGORIES[$category]}"
     declare -n COMMANDS="$name"
 
-    for command in "${!COMMANDS[@]}"; do
-        MAX_COMMAND_LENGTH=$(( $MAX_COMMAND_LENGTH > ${#command} ? ${MAX_COMMAND_LENGTH} : ${#command} ))
-    done
+    if [ ! -z "${COMMANDS[${1}]}" ]; then
+      found=1
+      ARGS="${COMMANDS[${1}:args]}"
+
+      # Parse ARGS into a set of arguments
+      IFS=$';' ARGLIST=(${ARGS})
+      unset IFS
+
+      # Parse out the usage item for the argument ('[FILE] [-d FLAG]', etc)
+      MAX_ARG_LENGTH=1
+      ARGS=''
+      for argitem in "${ARGLIST}"; do
+        IFS=$'#' ARGITEM=(${argitem})
+        unset IFS
+        type=${ARGITEM[-1]}
+        ARGS="${ARGS} ${type}"
+        MAX_ARG_LENGTH=$(( $MAX_ARG_LENGTH > ${#type} ? ${MAX_ARG_LENGTH} : ${#type} ))
+      done
+
+      usage $1 ${ARGS}
+
+      echo
+      echo "${COMMANDS[${1}]}"
+
+      if [ ! -z "${ARGS}" ]; then
+        echo
+        echo "Arguments:"
+        for argitem in "${ARGLIST}"; do
+          IFS=$'#' ARGITEM=(${argitem})
+          name=${ARGITEM[0]}
+          type=${ARGITEM[-1]}
+          description=${ARGITEM[1]}
+          printf "  %-${MAX_ARG_LENGTH}s    %s: %s\n" ${type} ${name} "${description}"
+          unset IFS
+        done
+      fi
+      break
+    fi
+
+    if [ ${found} == 1 ]; then
+      break
+    fi
+  done
+
+  if [ ${found} == 0 ]; then
+    echo "'${1}' is not a known command."
+    echo
+    usage
+    exit 1
+  fi
+
+  exit 0
+fi
+
+# First, determine the longest command (so we can tab things over)
+MAX_COMMAND_LENGTH=1
+for category in "${!CATEGORIES[@]}"; do
+  name="${CATEGORIES[$category]}"
+  declare -n COMMANDS="$name"
+
+  for command in "${!COMMANDS[@]}"; do
+    # Skip ':args' blocks
+    if [[ "${command}" == *:args ]]; then
+      continue
+    fi
+    MAX_COMMAND_LENGTH=$(( $MAX_COMMAND_LENGTH > ${#command} ? ${MAX_COMMAND_LENGTH} : ${#command} ))
+  done
 done
 
 # Print out the list of general commands
 for category in "${!CATEGORIES[@]}"; do
-    echo ""
-    echo "${category}: "
-    name="${CATEGORIES[$category]}"
-    declare -n COMMANDS="$name"
+  echo ""
+  echo "${category}: "
+  name="${CATEGORIES[$category]}"
+  declare -n COMMANDS="$name"
 
-    # Sort the list of commands
-    IFS=$'\n' sorted=($(sort -n <<<"${!COMMANDS[*]}"))
-    unset IFS
+  # Sort the list of commands
+  IFS=$'\n' sorted=($(sort -n <<<"${!COMMANDS[*]}"))
+  unset IFS
 
-    # Print out each command
-    for command in "${sorted[@]}"; do
-        printf "  %-${MAX_COMMAND_LENGTH}s    %s\n" ${command} "${COMMANDS[$command]}"
-    done
+  # Print out each command
+  for command in "${sorted[@]}"; do
+    if [[ "${command}" == *:args ]]; then
+      continue
+    fi
+    printf "  %-${MAX_COMMAND_LENGTH}s    %s\n" ${command} "${COMMANDS[$command]}"
+  done
 done
