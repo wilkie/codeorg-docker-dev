@@ -55,7 +55,7 @@ services:
       # Web server port
       - "3000:3000"
     healthcheck:
-      test: "curl --fail http://localhost:3000"
+      test: "curl --fail --head http://localhost:3000/assets/css/code-studio.css"
       interval: 2s
       retries: 100
       start_period: 30s
@@ -125,7 +125,7 @@ services:
       RAILS_ENV: test
     command: /bin/bash -i -c "./bin/dashboard-server"
     healthcheck:
-      test: "curl --fail http://localhost:3000"
+      test: "curl --fail --head http://localhost:3000/assets/css/code-studio.css"
       interval: 2s
       retries: 100
       start_period: 30s
