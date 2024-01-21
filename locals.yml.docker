@@ -1,0 +1,10 @@
+slack_bot_token: localoverride
+pardot_private_key: localoverride
+firebase_secret: localoverride
+firebase_shared_secret: localoverride
+properties_encryption_key:
+db_writer: 'mysql://root:password@db/'
+db_endpoint_writer: 'db'
+db_credential_admin:
+  username: root
+  password: password

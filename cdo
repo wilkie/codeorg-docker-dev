@@ -12,6 +12,17 @@ RUN_CMD='run --rm'
 BUILD_CMD='build'
 EXEC_CMD='exec'
 
+COMPOSE_VERSION=2.22.0
+COMPOSE_URL=https://github.com/docker/compose/releases/download/v${COMPOSE_VERSION}/docker-compose-linux-x86_64
+
+install_docker()
+{
+  mkdir -p ~/.docker/cli-plugins/
+  curl -SL "${COMPOSE_URL}" -o ~/.docker/cli-plugins/docker-compose
+  chmod +x ~/.docker/cli-plugins/docker-compose
+  docker compose version
+}
+
 # Ensure we are within SCRIPT_DIR
 if [[ "${PWD}" != ${SCRIPT_DIR}* ]]; then
   echo "Error: Must be within the docker root: ${SCRIPT_DIR}"
@@ -115,6 +126,52 @@ fi
 command=$1
 shift
 
+if [[ "${command}" == "install:docker-compose" ]]; then
+    install_docker
+    exit $?
+fi
+
+# Initial check for docker
+set +e
+docker --version > /dev/null 2> /dev/null
+if [[ ${?} != 0 ]]; then
+  echo 'Error: Docker is not installed or errors when used.'
+  echo
+  echo "1. You can install with your operating system's package manager."
+  echo "   - Ubuntu: sudo apt update; sudo apt install docker.io"
+  echo "   - Arch Linux: sudo pacman -Sy docker"
+  echo
+  echo "2. Then make sure the docker service is running."
+  echo "   - Typically via \`sudo systemctl enable docker; sudo systemctl start docker\`"
+  echo
+  echo "3. Make sure your user account can access the service."
+  echo "   - Typically this means your account is in the 'docker' group."
+  exit 1
+fi
+set -e
+
+# Initial check of docker version
+set +e
+docker compose version > /dev/null 2> /dev/null
+if [[ ${?} != 0 ]]; then
+  echo 'Error: Docker Compose is not installed.'
+  echo
+  echo 'You can install with \`./cdo install:docker-compose\`'
+  exit 1
+fi
+set -e
+
+CURRENT_VERSION=`docker compose version | grep -ohP '\d+[.]\d+[.]\d+'`
+CURRENT_VERSION=(${CURRENT_VERSION//./ })
+
+# Error if docker-compose is not the right version
+if [[ ${CURRENT_VERSION[0]} < 2 || (${CURRENT_VERSION[0]} == 2 && ${CURRENT_VERSION[1]} < 16) ]]; then
+    echo 'Error: Docker Compose is too old. We need at least version 2.16.'
+    echo
+    echo 'You can install with \`./cdo install:docker-compose\`'
+    exit 1
+fi
+
 if [[ "${command}" == "init" || "${command}" == "setup" ]]; then
   echo "Initializing cdo scripts..."
   echo "- Copying bash tab completion"
@@ -133,7 +190,83 @@ if [[ "${command}" == "init" || "${command}" == "setup" ]]; then
   fi
 
   echo "- Done."
-  exit $?
+  # Bail out if this is the exact thing requested.
+  if [ "${command}" == "init" ]; then
+    exit $?
+  fi
+fi
+
+if [[ "${command}" == "install:src" || "${command}" == "setup" ]]; then
+  # Clone the repo
+  echo "- Cloning the repository"
+  if [ ! -e src/locals.yml.default ]; then
+    # We /could/ use 'git' inside the container and remove that dependency, too
+    git clone https://github.com/code-dot-org/code-dot-org ${SCRIPT_DIR}/src
+    if [[ ${?} != 0 ]]; then
+      echo "Error: could not clone the repository."
+      echo
+      echo "Try to remove the \`src\` path and try again."
+      exit 1
+    fi
+  else
+    echo "- Repository already checked out... not cloning."
+    echo "- Remove or move the \`src\` directory to force a reclone."
+  fi
+
+  # Attempt to patch SELENIUM_URL
+  echo "- Patching source for use in docker"
+  pushd ${SCRIPT_DIR}/src
+  patch -p1 -N --no-backup-if-mismatch -r- < ../patches/0001-Allows-SELENIUM_URL-to-target-a-remote-selenium-inst.patch || true
+  popd
+
+  # Initialize a locals.yml
+  if [ ! -e src/locals.yml ]; then
+    echo "- Creating a new \`locals.yml\`"
+    cp src/locals.yml.default src/locals.yml
+    echo "- Updating \`locals.yml\` with settings appropriate for docker."
+    cat locals.yml.docker >> src/locals.yml
+  else
+    echo "- \`locals.yml\` already found. Not updating it."
+  fi
+
+  echo "- Done."
+
+  # Bail out if this is the exact thing requested.
+  if [ "${command}" == "install:src" ]; then
+    exit $?
+  fi
+fi
+
+if [[ "${command}" == "build:docker" || "${command}" == "setup" ]]; then
+  if [ ! -z ${1} ]; then
+    set +e
+    run '-L' 'build' ${@} 'web'
+    CODE=$?
+    if [ ${CODE} == 0 ]; then
+      run '-L' 'build' ${@} 'test'
+      CODE=$?
+    fi
+    set -e
+    if [ ${CODE} != 0 ]; then
+      echo "Error: Could not build."
+      echo
+      echo "This might mean something stale in the apt packages."
+      echo "You could try to invoke directly with the \`--no-cache\` option:"
+      echo
+      echo "cdo build:docker --no-cache"
+      exit 1
+    fi
+  else
+    run '-L' 'build' 'web'
+    run '-L' 'build' 'test'
+  fi
+
+  # Bail out if this is the exact thing requested.
+  if [ "${command}" == "build:docker" ]; then
+    exit $?
+  fi
+else
+  GENERAL[build:docker]="Builds the docker containers."
 fi
 
 if [[ "${command}" == "reset:db" || "${command}" == "reset" ]]; then
@@ -171,27 +304,27 @@ else
   GENERAL[reset]="Resets the rbenv and nvm environment and reinstalls."
 fi
 
+if [[ "${command}" == "install:js" || "${command}" == "install" || "${command}" == "setup" ]]; then
+  # Copy over a pre-built copy of nvm
+  if [ ! -e nvm/package.json ]; then
+    run 'run' 'web' 'cp -r /opt/base-nvm/* /home/cdodev/.nvm/.'
+  fi
+
+  # Yarn install
+  run 'run' 'web' 'cd apps; yarn install; yarn add karma-firefox-launcher@^2.1.2'
+
+  # Stop if this is all that was asked of us
+  if [ "${command}" == "install:js" ]; then
+    exit $?
+  fi
+else
+  GENERAL[install:js]="Installs JavaScript libraries."
+fi
+
 if [[ "${command}" == "install:ruby" || "${command}" == "install" || "${command}" == "setup" ]]; then
   # Copy over a pre-built copy of rbenv
   if [ ! -e rbenv/versions ]; then
     run 'run' 'web' "cp -r /opt/base-rbenv/* /home/cdodev/.rbenv/."
-  fi
-
-  # Clone the repo
-  if [ ! -e src/locals.yml.default ]; then
-    # We /could/ use 'git' inside the container and remove that dependency, too
-    git clone https://github.com/code-dot-org/code-dot-org ${SCRIPT_DIR}/src
-  fi
-
-  # Attempt to patch SELENIUM_URL
-  pushd ${SCRIPT_DIR}/src
-  patch -p1 -N --no-backup-if-mismatch -r- < ../patches/0001-Allows-SELENIUM_URL-to-target-a-remote-selenium-inst.patch || true
-  popd
-
-  # Initialize a locals.yml
-  if [ ! -e src/locals.yml ]; then
-    cp src/locals.yml.default src/locals.yml
-    cat locals.yml.settings >> src/locals.yml
   fi
 
   # Bundle
@@ -220,24 +353,10 @@ else
   GENERAL[install:ruby]="Installs the ruby environment."
 fi
 
-if [[ "${command}" == "install:js" || "${command}" == "install" || "${command}" == "setup" ]]; then
-  # Copy over a pre-built copy of nvm
-  if [ ! -e nvm/package.json ]; then
-    run 'run' 'web' 'cp -r /opt/base-nvm/* /home/cdodev/.nvm/.'
-  fi
-
-  # Yarn install
-  run 'run' 'web' 'cd apps; yarn install; yarn add karma-firefox-launcher@^2.1.2'
-
-  # Stop if this is all that was asked of us
-  if [ "${command}" == "install:js" ]; then
-    exit $?
-  fi
+if [ "${command}" == "install" ]; then
+  echo "Install complete."
+  exit $?
 else
-  GENERAL[install:js]="Installs JavaScript libraries."
-fi
-
-if [ "${command}" != "install" ]; then
   GENERAL[install]="Installs all."
 fi
 
@@ -252,33 +371,6 @@ if [[ "${command}" == "db:setup" || "${command}" == "setup" ]]; then
   fi
 else
   GENERAL[db:setup]="Sets up the database configuration."
-fi
-
-if [[ "${command}" == "build:docker" || "${command}" == "setup" ]]; then
-  if [ ! -z ${1} ]; then
-    set +e
-    run '-L' 'build' ${@} 'web'
-    CODE=$?
-    if [ ${CODE} == 0 ]; then
-      run '-L' 'build' ${@} 'test'
-      CODE=$?
-    fi
-    set -e
-    if [ ${CODE} != 0 ]; then
-      echo "Error: Could not build."
-      echo
-      echo "This might mean something stale in the apt packages."
-      echo "You could try to invoke directly with the \`--no-cache\` option:"
-      echo
-      echo "cdo build:docker --no-cache"
-      exit 1
-    fi
-  else
-    run '-L' 'build' 'web'
-    run '-L' 'build' 'test'
-  fi
-else
-  GENERAL[build:docker]="Builds the docker containers."
 fi
 
 if [[ "${command}" == "build" || "${command}" == "setup" ]]; then
@@ -312,11 +404,12 @@ else
 fi
 
 if [ "${command}" == "setup" ]; then
-  echo "Setup complete successfully."
+  echo "Setup completed successfully."
   echo
   echo "You can see help for other possible commands with \`cdo help\`"
   echo
   echo "You can run the server with \`cdo server\` which will run the server on port 3000"
+  exit $?
 else
   GENERAL[setup]="Does the complete project setup."
 fi
