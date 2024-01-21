@@ -374,7 +374,8 @@ if [[ "${command}" == "install:ruby" || "${command}" == "install:gems" || "${com
     exit $?
   fi
 else
-  GENERAL[install:ruby]="Installs the ruby environment."
+  GENERAL[install:gems]="Installs ruby gems from the Gemfile."
+  GENERAL[install:ruby]="Installs the ruby environment (including gems)."
 fi
 
 if [ "${command}" == "install" ]; then
