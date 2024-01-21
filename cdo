@@ -275,9 +275,7 @@ if [[ "${command}" == "install:s3" || "${command}" == "install" || "${command}" 
   echo
   for bucket in ${BUCKETS}; do
     echo "- Creating bucket ${bucket}"
-    set +e
-    run '-q' 'run' 'mc' "/bin/bash -ic 'mc alias set minio \${MINIO_SERVER_URL} \${MINIO_ROOT_USER} \${MINIO_ROOT_PASSWORD}' > /dev/null 2> /dev/null; mc mb minio/${bucket}"
-    set -e
+    run '-q' 'run' 'mc' "/bin/bash -ic 'mc alias set minio \${MINIO_SERVER_URL} \${MINIO_ROOT_USER} \${MINIO_ROOT_PASSWORD}' > /dev/null 2> /dev/null; mc mb --ignore-existing minio/${bucket}"
   done
   echo "- Done."
 
@@ -583,11 +581,22 @@ if [ "${command}" == "s3:mkdir" ]; then
 
   # Error if there isn't a '/' somewhere... we need the name of the bucket
   # within the path.
+  if [[ "${1}" != */* ]]; then
+    echo "Error: The given argument must have a bucket name and a path."
+    echo
+    echo "For instance, in the following examples, the bucket is 'foo' and the"
+    echo "  directory to be created is 'bar' or 'baz' within 'bar'."
+    echo
+    echo "Usage: cdo s3:mkdir {bucket}/{path}[/*]"
+    echo "Example: cdo s3:mkdir foo/bar"
+    echo "Example: cdo s3:mkdir foo/bar/baz"
+    exit 1
+  fi
 
-  run 'run' 'mc' "/bin/bash -ic 'mc alias set minio \${MINIO_SERVER_URL} \${MINIO_ROOT_USER} \${MINIO_ROOT_PASSWORD}'; mc mb minio/${1}"
+  run 'run' 'mc' "/bin/bash -ic 'mc alias set minio \${MINIO_SERVER_URL} \${MINIO_ROOT_USER} \${MINIO_ROOT_PASSWORD}'; mc mb --ignore-existing minio/${1}"
   exit $?
 else
-  MAINTENANCE[s3:new]="Create a new bucket."
+  MAINTENANCE[s3:mkdir]="Create a directory within an existing bucket."
 fi
 
 if [ "${command}" == "s3:ls" ]; then
