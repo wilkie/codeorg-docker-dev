@@ -31,6 +31,9 @@ If you are on a Linux machine, you can follow the instructions [here](https://do
 
 You will need to ensure that `docker compose` is usable in your install.
 Occasionally the `compose` features are installed separately.
+The `cdo` script can install this as a plugin for an existing Docker install via `cdo install:docker-compose`.
+
+The `cdo` script will be able to address some simple issues and give more information as needed.
 
 Note: This repo has been tested using Docker versions as low as 20.10.17 and as new as 24.0.6.
 
@@ -64,14 +67,12 @@ To put our directory in your `PATH` and simply use `cdo` wherever, run the `init
 
 Now you can, from any point in the repository space, just run the `cdo` command.
 
-## Step 2: Install
+## Step 2: Full development setup
 
-Run the install command to build the containers and install the libraries.
-
-This does the work primarily done by the `rake install` steps.
+Run the setup command to build the containers and install the libraries.
 
 ```
-cdo install
+cdo setup
 ```
 
 ## Optional Step: Configure AWS credentials
@@ -93,16 +94,6 @@ go through the process of generating your credentials anyway.
 	- ```export OAUTH_CODE=copied value```
 	- (If you close the terminal window or restart the containers, you'll need to repeat this)
 
-## Step 3: Build
-
-Use the `build` command:
-
-This performs the `rake build` within the web container.
-
-```
-cdo build
-```
-
 ## Step 4: Running tests
 
 To run pegasus tests:
@@ -122,6 +113,12 @@ To run dashboard UI tests:
 
 ```
 cdo test:ui
+```
+
+To run JavaScript unit tests:
+
+```
+cdo test:js
 ```
 
 ## Optional: Run/Debug Dashboard and Pegasus (RubyMine)
@@ -204,23 +201,19 @@ To disable git info in the prompt (and speed up the terminal), run the following
 
 ## FAQ
 
-#### Q: If I delete the containers, does it delete any data?
+### Q: If I delete the containers, does it delete any data?
 
-No, all data resides on the host laptop and is mounted by the containers when they start. Source is kept in the ./src folder. MySQL database files are kept in the ./data folder.
+No, all data resides on the host laptop and is mounted by the containers when they start. Source is kept in the ./src folder. MySQL database files are kept in the ./.mysql-data folder. MinIO (S3) data is kept in the `./minio...` paths. The installed ruby gems are in `./rbenv` and a copy of the installed nvm packages are in `./nvm`.
 
-#### Q: Does my IDE run in a container?
+### Q: Does my IDE run in a container?
 
 No, your IDE runs on your host laptop as normal.
 
-#### Q: Where do I set my IDE to point to?
+### Q: Where do I set my IDE to point to?
 
 Use your preferred IDE to open the ./src folder - just as you would if you were developing on your host laptop. As this is a mounted volume in the web container, any changes are reflected immediately.
 
-#### Q: Do I need to go through all these steps every time?
-
-No, once the containers are created, you are all set! If you restart the containers, you'll need to generate and set a new OAUTH_CODE and restart the dashboard server.
-
-#### Q: Can I pause containers?
+### Q: Can I pause containers?
 
 Yes, you can use pause and unpause commands with Docker compose:
 
@@ -228,42 +221,34 @@ Yes, you can use pause and unpause commands with Docker compose:
 docker compose pause|unpause
 ```
 
-#### Q: How do I rebuild my database?
+### Q: How do I rebuild my database?
 
-All of the MySQL database files are held in the ./data directory. To rebuild the database from scratch, simply delete this folder, restart the containers, and run the seeding step again.
+First, you can backup the existing database by copying the `./.mysql-data` directory. This is the persisted data for the `db` container.
 
-#### Q: I need to install a new Gem. How do I do this?
+You can drop the database with `cdo reset:db` and then run the `cdo seed` step or, more thoroughly and so to include migrations, the `cdo build` step.
 
-Edit src/Gemfile, connect to the Web container, and run bundle install:
+All of the MySQL database files are held in the `./mysql-data` directory. To rebuild the database from scratch, simply delete this folder, restart the containers, and run the seeding step again via `cdo build`.
 
-```
-docker exec -ti web bash
-cd /app/src
-bundle install
-```
+### Q: I need to install a new Gem. How do I do this?
 
-If you want this Gem to persist container restarts, rebuild the container:
+Edit src/Gemfile and then run the `cdo install:gems` step. More thoroughly, run the `cdo install:ruby` step which also performs a `rake install` and a reseeding of the test database.
 
-```
-docker compose build
-```
-
-#### Q: Is using Docker slower than developing on my laptop?
+### Q: Is using Docker slower than developing on my laptop?
 
 There should be little noticeable performance difference between developing using Docker and on your host laptop. Older versions of Docker used to have performance issues when mounting large volumes, but this has since been resolved with VirtioFS.
 
-#### Q: Do I need to install Ruby and/or MySQL on my host laptop?
+### Q: Do I need to install Ruby and/or MySQL on my host laptop?
 
-No! The only required dependency on the host laptop is Docker desktop.
+No! The only required dependency on the host laptop is Docker desktop. The script can also install the appropriate version of Docker Compose for you via `cdo install:docker-compose`.
 
-#### Q: Does this work on Windows-based PCs?
+### Q: Does this work on Windows-based PCs?
 
 It should, but this README needs to include the Windows-equivalent commands and/or how this would work with WSL. PRs welcome :)
 
-#### Q: Does this work for M1-based Macs?
+### Q: Does this work for M1-based Macs?
 
 Yes, the dev environment works for both x86 and ARM64-based machines.
 
-#### Q: Does this work for Linux-based PCs?
+### Q: Does this work for Linux-based PCs?
 
 Yes. These instructions will also work for Linux-based server images (such as an EC2 instance running in AWS).

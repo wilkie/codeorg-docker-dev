@@ -269,8 +269,29 @@ else
   GENERAL[build:docker]="Builds the docker containers."
 fi
 
+if [[ "${command}" == "install:s3" || "${command}" == "install" || "${command}" == "setup" ]]; then
+  BUCKETS="cdo-v3-files cdo-v3-assets cdo-v3-sources"
+  echo "Creating MinIO S3 Buckets..."
+  echo
+  for bucket in ${BUCKETS}; do
+    echo "- Creating bucket ${bucket}"
+    set +e
+    run '-q' 'run' 'mc' "/bin/bash -ic 'mc alias set minio \${MINIO_SERVER_URL} \${MINIO_ROOT_USER} \${MINIO_ROOT_PASSWORD}' > /dev/null 2> /dev/null; mc mb minio/${bucket}"
+    set -e
+  done
+  echo "- Done."
+
+  # Bail out if this is the exact thing requested.
+  if [ "${command}" == "install:s3" ]; then
+    exit $?
+  fi
+else
+  GENERAL[install:s3]="Creates initial MinIO S3 buckets."
+fi
+
 if [[ "${command}" == "reset:db" || "${command}" == "reset" ]]; then
-  command="install"
+  run 'run' 'web' 'cd dashboard; bundle exec rake db:reset'
+  exit $?
 else
   GENERAL[reset:db]="Resets the database and reinstalls."
   GENERAL[reset:db:args]=""
@@ -321,7 +342,7 @@ else
   GENERAL[install:js]="Installs JavaScript libraries."
 fi
 
-if [[ "${command}" == "install:ruby" || "${command}" == "install" || "${command}" == "setup" ]]; then
+if [[ "${command}" == "install:ruby" || "${command}" == "install:gems" || "${command}" == "install" || "${command}" == "setup" ]]; then
   # Copy over a pre-built copy of rbenv
   if [ ! -e rbenv/versions ]; then
     run 'run' 'web' "cp -r /opt/base-rbenv/* /home/cdodev/.rbenv/."
@@ -329,6 +350,11 @@ if [[ "${command}" == "install:ruby" || "${command}" == "install" || "${command}
 
   # Bundle
   run 'run' 'web' 'bundle install'
+
+  # Stop if this is all that was asked of us
+  if [ "${command}" == "install:gems" ]; then
+    exit $?
+  fi
 
   # Rake install
   run 'run' 'web' 'bundle exec rake install'
@@ -516,17 +542,82 @@ if [ "${command}" == "server" ]; then
     echo
     echo "When it is ready, you can view it at:"
     echo "http://localhost-studio.code.org:3000"
+    echo
     run 'up' '-d' server
   else
     echo "Running server in the foreground"
     echo
     echo "When it is ready, you can view it at:"
     echo "http://localhost-studio.code.org:3000"
+    echo
     run 'run' '-i --service-ports' 'server'
   fi
   exit $?
 else
   SERVICES[server]="Run the web server in the foreground. Use '-d' to run in background."
+fi
+
+if [ "${command}" == "s3:new" ]; then
+  if [ -z ${1} ]; then
+    echo "Error: The name of the new bucket is required."
+    echo
+    echo "Usage: cdo s3:new foo"
+    exit 1
+  fi
+
+  run 'run' 'mc' "/bin/bash -ic 'mc alias set minio \${MINIO_SERVER_URL} \${MINIO_ROOT_USER} \${MINIO_ROOT_PASSWORD}'; mc mb minio/${1} --with-versioning"
+  exit $?
+else
+  MAINTENANCE[s3:new]="Create a new bucket."
+fi
+
+if [ "${command}" == "s3:mkdir" ]; then
+  if [ -z ${1} ]; then
+    echo "Error: The name of the new path is required."
+    echo
+    echo "Usage: cdo s3:mkdir {bucket}/{path}[/*]"
+    echo "Example: cdo s3:mkdir foo/bar"
+    echo "Example: cdo s3:mkdir foo/bar/baz"
+    exit 1
+  fi
+
+  # Error if there isn't a '/' somewhere... we need the name of the bucket
+  # within the path.
+
+  run 'run' 'mc' "/bin/bash -ic 'mc alias set minio \${MINIO_SERVER_URL} \${MINIO_ROOT_USER} \${MINIO_ROOT_PASSWORD}'; mc mb minio/${1}"
+  exit $?
+else
+  MAINTENANCE[s3:new]="Create a new bucket."
+fi
+
+if [ "${command}" == "s3:ls" ]; then
+  if [ -z ${1} ]; then
+    echo "Error: The path is required."
+    echo
+    echo "Usage: cdo s3:ls {bucket}/{path}[/*]"
+    echo "Example: cdo s3:ls foo/some/path"
+    exit 1
+  fi
+
+  run 'run' 'mc' "/bin/bash -ic 'mc alias set minio \${MINIO_SERVER_URL} \${MINIO_ROOT_USER} \${MINIO_ROOT_PASSWORD}'; mc ls minio/${1}"
+  exit $?
+else
+  MAINTENANCE[s3:ls]="List the directory within a local S3 (minio) bucket."
+fi
+
+if [ "${command}" == "s3:cat" ]; then
+  if [ -z ${1} ]; then
+    echo "Error: The path is required."
+    echo
+    echo "Usage: cdo s3:cat {bucket}/{path}[/*]"
+    echo "Example: cdo s3:cat foo/some/path/file.txt"
+    exit 1
+  fi
+
+  run 'run' 'mc' "/bin/bash -ic 'mc alias set minio \${MINIO_SERVER_URL} \${MINIO_ROOT_USER} \${MINIO_ROOT_PASSWORD}'; mc cat minio/${1}"
+  exit $?
+else
+  MAINTENANCE[s3:cat]="View the file contents of a file within a local S3 (minio) bucket."
 fi
 
 if [ "${command}" == "console" ]; then

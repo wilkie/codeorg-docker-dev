@@ -1,6 +1,8 @@
 version: '3.9'
 services:
-  # Exposes port 3000
+  # The development mode web environment
+  #
+  # This will run the web server but only exposing the ports internally
   web:
     container_name: web
     hostname: web
@@ -29,6 +31,7 @@ services:
     profiles:
       - web
 
+  # Runs the aws-access binary for code-dot-org engineers
   aws-access:
     extends: web
     image: codedotorg/codedotorg-aws-access
@@ -44,6 +47,7 @@ services:
     profiles:
       - aws-access
 
+  # Runs the development environment dashboard web server
   server:
     extends: web
     command: /bin/bash -i -c "./bin/dashboard-server"
@@ -53,36 +57,42 @@ services:
     profiles:
       - test
 
+  # Runs a normal bash shell within the development web environment
   shell:
     extends: web
     command: /bin/bash
     profiles:
       - shell
 
+  # Runs database seeds within the development web environment
   seed:
     extends: web
     command: /bin/bash -ic 'cd dashboard; bundle exec rake seed:ui_test'
     profiles:
       - seed
 
+  # Runs database migrations within the development web environment
   migrate:
     extends: web
     command: /bin/bash -ic 'cd dashboard; bundle exec rake db:migrate && cd ../pegasus && bundle exec rake db:migrate'
     profiles:
       - migrate
 
+  # Runs the ruby interactive shell within the web environment
   irb:
     extends: web
     command: /bin/bash -ic 'bundle exec irb'
     profiles:
       - irb
 
+  # Runs the node interactive shell within the web environment
   node:
     extends: web
     command: /bin/bash -ic 'node'
     profiles:
       - node
 
+  # Runs the dashboard console within the web environment
   console:
     extends: web
     command: ./bin/dashboard-console
@@ -123,6 +133,7 @@ services:
           - localhost-studio.code.org
           - localhost-hourofcode.org
 
+  # This runs the dashboard server in the test environment
   test-server:
     extends: test
     command: /bin/bash -i -c "./bin/dashboard-server"
@@ -132,6 +143,7 @@ services:
     profiles:
       - test
 
+  # This runs a dashboard unit test within view of the test server
   unit-tests:
     extends: test
     command: /bin/bash -ic 'bundle exec spring testunit'
@@ -140,6 +152,7 @@ services:
     networks:
       - cdo_network_test
 
+  # This runs a browser UI test
   ui-tests:
     extends: test
     command: /bin/bash -ic 'bundle exec rake test:ui'
@@ -157,6 +170,7 @@ services:
     networks:
       - cdo_network_test
 
+  # This runs a JavaScript unit test
   js-tests:
     extends: test
     working_dir: /app/src/apps
@@ -167,8 +181,9 @@ services:
   db:
     container_name: db
     hostname: db
-    # Uncomment for x86:
+    # This is the normal x86 image:
     #image: mysql:5.7.30
+    # This one is multi-arch and supports arm:
     image: biarms/mysql:5.7.30
     environment:
       MYSQL_DATABASE: 'db'
@@ -216,6 +231,8 @@ services:
       - db-console
 
   # A Selenium server running Chrome
+  #
+  # This is used for browser UI tests.
   selenium:
     container_name: selenium
     hostname: selenium
@@ -232,15 +249,28 @@ services:
     networks:
       - cdo_network_test
 
-  # minio version RELEASE.2021-07-30T00-02-00Z
+  # MinIO requires a set of volumes in order to have 'versioned' buckets, which
+  # the code-dot-org code expects and requires for its buckets.
+  minio-env:
+    image: scratch
+    environment:
+      MINIO_VOLUMES: "http://minio:9000/data{1...4}"
+      MINIO_SERVER_URL: "http://minio:9000"
+      MINIO_ROOT_USER: codeorg
+      MINIO_ROOT_PASSWORD: allstudents
+      MINIO_STORAGE_CLASS_STANDARD: "EC:2"
+
+  # MinIO version RELEASE.2021-07-30T00-02-00Z
   # Exposes ports 9000 and 9001 to the world
   # You can log into the console at localhost:9001 with the given
   # username and password (codeorg / allstudents)
   minio:
+    extends: minio-env
     container_name: minio
     hostname: minio
-    # Uncomment for x86:
+    # x86 image:
     image: minio/minio:RELEASE.2021-07-30T00-02-00Z
+    # arm image:
     #image: pixelchrome/minio-arm:latest-arm32v7
     ports:
       - "9000:9000"
@@ -250,13 +280,20 @@ services:
       - ./.minio2-storage:/data2
       - ./.minio3-storage:/data3
       - ./.minio4-storage:/data4
-    environment:
-      MINIO_VOLUMES: "http://minio:9000/data{1...4}"
-      MINIO_SERVER_URL: "http://minio:9000"
-      MINIO_ROOT_USER: codeorg
-      MINIO_ROOT_PASSWORD: allstudents
-      MINIO_STORAGE_CLASS_STANDARD: "EC:2"
     command: server --console-address ":3001" /data1 /data2 /data3 /data4
+    profiles:
+      - web
+    networks:
+      - cdo_network
+
+  # Minio Client (mc)
+  mc:
+    extends: minio-env
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint: ''
     profiles:
       - web
     networks:
