@@ -536,20 +536,58 @@ fi
 
 if [ "${command}" == "server" ]; then
   run 'stop' 'server'
-  if [ "${1}" == "-d" ]; then
-    echo "Running server in the background..."
-    echo
-    echo "When it is ready, you can view it at:"
-    echo "http://localhost-studio.code.org:3000"
-    echo
-    run 'up' '-d' server
-  else
+  if [ "${1}" == "-f" ]; then
     echo "Running server in the foreground"
     echo
     echo "When it is ready, you can view it at:"
     echo "http://localhost-studio.code.org:3000"
     echo
     run 'run' '-i --service-ports' 'server'
+  else
+    echo "Running server in the background..."
+    echo
+    echo "When it is ready, you can view it at:"
+    echo "http://localhost-studio.code.org:3000"
+    echo
+    set -m
+    run 'up' '-d' 'server'
+    docker compose logs server -f --since 0s &
+    LOG_PID=$!
+    set +e
+    wait_until_healthy()
+    {
+      while sleep 0.5; do
+        docker compose ps | grep -e 'dashboard-server' > /dev/null
+        if [ ${?} != 0 ]; then
+          echo "Web service stopped unexpectedly."
+          break
+        fi
+
+        docker compose ps | grep -e 'dashboard-server.\+healthy' > /dev/null
+        if [ ${?} == 0 ]; then
+          echo "Web service started."
+          echo
+          echo "You can view it at:"
+          echo "http://localhost-studio.code.org:3000"
+          break
+        fi
+      done
+      set -e
+
+      # Stop the logs process
+      kill -SIGTSTP ${LOG_PID} > /dev/null 2> /dev/null
+    }
+
+    wait_until_healthy &
+    # Foreground the logs subprocess
+    fg %1
+
+    # Remove it from our interactive terminal
+    # (it warns us about disowning a stopped process... so we dump that warning)
+    disown %1 > /dev/null 2> /dev/null
+
+    # Terminate the logs subprocess
+    kill -SIGKILL -${LOG_PID} > /dev/null 2> /dev/null
   fi
   exit $?
 else

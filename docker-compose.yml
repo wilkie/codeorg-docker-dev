@@ -54,6 +54,12 @@ services:
     ports:
       # Web server port
       - "3000:3000"
+    healthcheck:
+      test: "curl --fail http://localhost:3000"
+      interval: 2s
+      retries: 100
+      start_period: 30s
+      timeout: 10s
     profiles:
       - test
 

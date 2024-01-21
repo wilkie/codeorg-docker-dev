@@ -94,7 +94,7 @@ go through the process of generating your credentials anyway.
 	- ```export OAUTH_CODE=copied value```
 	- (If you close the terminal window or restart the containers, you'll need to repeat this)
 
-## Step 4: Running tests
+## Step 3: Running tests
 
 To run pegasus tests:
 
@@ -121,11 +121,17 @@ To run JavaScript unit tests:
 cdo test:js
 ```
 
+## Development
+
+### Installing new gems
+
+When you edit the `Gemfile` within the repository directory (e.g. `./src/Gemfile`), run the `cdo install:gems` command.
+
 ## Optional: Run/Debug Dashboard and Pegasus (RubyMine)
 
 To setup the remote Ruby SDK:
 
-- Start containers, if they are not running, using `docker compose up`
+- Start containers, if they are not running, using `cdo server` or manually via `docker compose up`.
 - From RubyMine, open the "./src" folder. Ignore the "missing gem dependencies" messages when RubyMine first starts.
 - Wait until file indexing completes, then right click on the ./src/dashboard folder in the project pane and select "Mark Directory as... Ruby Project Root"
 - In RubyMine, go into preferences and navigate to the "Ruby SDK and Gems" settings.
