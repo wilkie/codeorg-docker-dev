@@ -183,10 +183,35 @@ if [[ "${command}" == "init" || "${command}" == "setup" ]]; then
       echo "- Adding cdo script binary to the PATH in bashrc"
       echo "# Code.org Repository (cdo) binary path:" >> ~/.bashrc
       echo "export PATH=\${PATH}:${SCRIPT_DIR}" >> ~/.bashrc
-      echo "- To use it immediately, run `source ~/.bashrc`"
+      echo "- To use it immediately, run \`source ~/.bashrc\`"
     else
       echo "- Not adding cdo script binary to the PATH in bashrc... already there"
     fi
+  fi
+
+  if [[ -d ~/.oh-my-zsh ]]; then
+    echo "- Found a oh-my-zsh installation"
+    echo "- Copying oh-my-zsh tab completion"
+    mkdir -p ~/.oh-my-zsh/completions
+    cp cdo-completion.zsh ~/.oh-my-zsh/completions/_cdo
+  fi
+
+  if [[ -f ~/.zshrc ]]; then
+    if [[ -z `grep "Code.org Repository " ~/.zshrc` ]]; then
+      echo "- Found a zsh installation"
+      echo "- Adding cdo script binary to the PATH in zshrc"
+      echo "# Code.org Repository (cdo) binary path:" >> ~/.zshrc
+      echo "export PATH=\${PATH}:${SCRIPT_DIR}" >> ~/.zshrc
+      echo "- Adding zsh completion script to fpath"
+      echo 'fpath=(~/.local/share/zsh-completion/completions $fpath)' >> ~/.zshrc
+      echo "- To use it immediately, run \`source ~/.zshrc\`"
+    else
+      echo "- Not adding cdo script binary to the PATH in bashrc... already there"
+    fi
+
+    echo "- Copying zsh tab completion to common path"
+    mkdir -p ~/.local/share/zsh-completion/completions
+    cp cdo-completion.zsh ~/.local/share/zsh-completion/completions/_cdo
   fi
 
   echo "- Done."
@@ -917,27 +942,27 @@ if [ ! -z $1 ]; then
       found=1
       ARGS="${COMMANDS[${1}:args]}"
 
-      # Parse ARGS into a set of arguments
-      IFS=$';' ARGLIST=(${ARGS})
-      unset IFS
-
-      # Parse out the usage item for the argument ('[FILE] [-d FLAG]', etc)
-      MAX_ARG_LENGTH=1
-      ARGS=''
-      for argitem in "${ARGLIST}"; do
-        IFS=$'#' ARGITEM=(${argitem})
-        unset IFS
-        type=${ARGITEM[-1]}
-        ARGS="${ARGS} ${type}"
-        MAX_ARG_LENGTH=$(( $MAX_ARG_LENGTH > ${#type} ? ${MAX_ARG_LENGTH} : ${#type} ))
-      done
-
-      usage $1 ${ARGS}
-
-      echo
-      echo "${COMMANDS[${1}]}"
-
       if [ ! -z "${ARGS}" ]; then
+        # Parse ARGS into a set of arguments
+        IFS=$';' ARGLIST=(${ARGS})
+        unset IFS
+
+        # Parse out the usage item for the argument ('[FILE] [-d FLAG]', etc)
+        MAX_ARG_LENGTH=1
+        ARGS=''
+        for argitem in "${ARGLIST}"; do
+          IFS=$'#' ARGITEM=(${argitem})
+          unset IFS
+          type=${ARGITEM[-1]}
+          ARGS="${ARGS} ${type}"
+          MAX_ARG_LENGTH=$(( $MAX_ARG_LENGTH > ${#type} ? ${MAX_ARG_LENGTH} : ${#type} ))
+        done
+
+        usage $1 ${ARGS}
+ 
+        echo
+        echo "${COMMANDS[${1}]}"
+
         echo
         echo "Arguments:"
         for argitem in "${ARGLIST}"; do
@@ -948,6 +973,11 @@ if [ ! -z $1 ]; then
           printf "  %-${MAX_ARG_LENGTH}s    %s: %s\n" ${type} ${name} "${description}"
           unset IFS
         done
+      else
+        usage $1
+ 
+        echo
+        echo "${COMMANDS[${1}]}"
       fi
       break
     fi

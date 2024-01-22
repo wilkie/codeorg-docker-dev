@@ -1,0 +1,45 @@
+#compdef cdo
+
+# zsh completion for cdo            -*- shell script -*-
+
+# Basic autoload of completion things
+autoload -U +X compinit && compinit
+
+# Get the path of the cdo repository
+local CDO_PATH="$(dirname `which cdo`)/src"
+
+# Get a list of commands and their descriptions
+# This also replaces ':' in the commands with an escaped '\\\:' which allows
+# zsh to understand that the subcommand's colon is not a separator
+# Otherwise, it looks for 'command:description' in an array.
+local COMMANDS=`cdo help | grep -ohe '^\s\s\S\+\s\+.\+$' | sed -e 's/^\s\s//' -e 's/:/\\\:/' -e 's/\(\S\)\s\+/\1:/'`
+
+# Form the array of subcommands
+local -a subcmds
+subcmds=("${(f)COMMANDS}")
+
+local cur=${words[-1]}
+
+if [[ ! -z ${words[2]} && ${cur} != ${words[2]} ]]; then
+  local ARGUMENTS=($(cdo help "${words[2]}" | grep -ohe '^\s\s\S\+'))
+  local ARGUMENT=${ARGUMENTS[1]}
+
+  # Get rid of 'optional' markings ('[...]')
+  ARGUMENT=${ARGUMENT//[\[\]]/}
+
+  if [[ ${ARGUMENT} == COMMAND* ]]; then
+    _describe 'command' subcmds
+  elif [[ ${ARGUMENT} == FILE* ]]; then
+    # Get any hint to the directory
+    local PARTS=("${(@s[:])ARGUMENT}")
+    #echo "parts: ${PARTS}"
+
+    ARGUMENT=${PARTS[1]}
+    SEARCH_PATH=${PARTS[2]}
+
+    _files -W ${CDO_PATH}/${SEARCH_PATH}
+  fi
+else
+  # The initial command listing
+  _describe 'command' subcmds
+fi
