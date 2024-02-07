@@ -115,6 +115,28 @@ run()
   fi
 }
 
+# Parse arguments into positional and optional
+declare -A optional
+parse_args()
+{
+  positional=
+
+  last=
+  for var in "${@}"; do
+    if [[ ! -z "${last}" ]]; then
+      key=${last/--/}
+      optional[${key}]="${var}"
+      last=
+    elif [[ "${var}" == --* ]]; then
+      last=${var}
+    else
+      positional="${positional} ${var}"
+    fi
+  done
+
+  positional=(${positional})
+}
+
 if [[ "$#" -le 0 ]]; then
   usage
 
@@ -193,7 +215,7 @@ if [[ "${command}" == "init" || "${command}" == "setup" ]]; then
     echo "- Found a oh-my-zsh installation"
     echo "- Copying oh-my-zsh tab completion"
     mkdir -p ~/.oh-my-zsh/completions
-    cp cdo-completion.zsh ~/.oh-my-zsh/completions/_cdo
+    cp ${SCRIPT_DIR}/cdo-completion.zsh ~/.oh-my-zsh/completions/_cdo
   fi
 
   if [[ -f ~/.zshrc ]]; then
@@ -211,7 +233,7 @@ if [[ "${command}" == "init" || "${command}" == "setup" ]]; then
 
     echo "- Copying zsh tab completion to common path"
     mkdir -p ~/.local/share/zsh-completion/completions
-    cp cdo-completion.zsh ~/.local/share/zsh-completion/completions/_cdo
+    cp ${SCRIPT_DIR}/cdo-completion.zsh ~/.local/share/zsh-completion/completions/_cdo
   fi
 
   echo "- Done."
@@ -221,11 +243,20 @@ if [[ "${command}" == "init" || "${command}" == "setup" ]]; then
   fi
 fi
 
-if [[ "${command}" == "install:src" || "${command}" == "setup" ]]; then
+if [[ "${command}" == "install:src" || "${command}" == "install" || "${command}" == "setup" ]]; then
   # Clone the repo
   echo "- Cloning the repository"
-  if [ ! -e src/locals.yml.default ]; then
+  if [ ! -e ${SCRIPT_DIR}/src/locals.yml.default ]; then
     # We /could/ use 'git' inside the container and remove that dependency, too
+    set +e
+    git lfs install --skip-repo
+    if [[ ${?} != 0 ]]; then
+      echo "Error: could not initialize git lfs."
+      echo
+      echo "You will need to install git-lfs to continue."
+      exit 1
+    fi
+
     git clone https://github.com/code-dot-org/code-dot-org ${SCRIPT_DIR}/src
     if [[ ${?} != 0 ]]; then
       echo "Error: could not clone the repository."
@@ -233,23 +264,24 @@ if [[ "${command}" == "install:src" || "${command}" == "setup" ]]; then
       echo "Try to remove the \`src\` path and try again."
       exit 1
     fi
+    set -e
+
+    # Attempt to patch SELENIUM_URL
+    echo "- Patching source for use in docker"
+    pushd ${SCRIPT_DIR}/src
+    patch -p1 -N --no-backup-if-mismatch -r- < ../patches/0001-Allows-SELENIUM_URL-to-target-a-remote-selenium-inst.patch || true
+    popd
   else
     echo "- Repository already checked out... not cloning."
     echo "- Remove or move the \`src\` directory to force a reclone."
   fi
 
-  # Attempt to patch SELENIUM_URL
-  echo "- Patching source for use in docker"
-  pushd ${SCRIPT_DIR}/src
-  patch -p1 -N --no-backup-if-mismatch -r- < ../patches/0001-Allows-SELENIUM_URL-to-target-a-remote-selenium-inst.patch || true
-  popd
-
   # Initialize a locals.yml
-  if [ ! -e src/locals.yml ]; then
+  if [ ! -e ${SCRIPT_DIR}/src/locals.yml ]; then
     echo "- Creating a new \`locals.yml\`"
-    cp src/locals.yml.default src/locals.yml
+    cp ${SCRIPT_DIR}/src/locals.yml.default ${SCRIPT_DIR}/src/locals.yml
     echo "- Updating \`locals.yml\` with settings appropriate for docker."
-    cat locals.yml.docker >> src/locals.yml
+    cat ${SCRIPT_DIR}/locals.yml.docker >> ${SCRIPT_DIR}/src/locals.yml
   else
     echo "- \`locals.yml\` already found. Not updating it."
   fi
@@ -350,7 +382,7 @@ fi
 
 if [[ "${command}" == "install:js" || "${command}" == "install" || "${command}" == "setup" ]]; then
   # Copy over a pre-built copy of nvm
-  if [ ! -e nvm/package.json ]; then
+  if [ ! -e ${SCRIPT_DIR}/nvm/package.json ]; then
     run 'run' 'web' 'cp -r /opt/base-nvm/* /home/cdodev/.nvm/.'
   fi
 
@@ -367,7 +399,7 @@ fi
 
 if [[ "${command}" == "install:ruby" || "${command}" == "install:gems" || "${command}" == "install" || "${command}" == "setup" ]]; then
   # Copy over a pre-built copy of rbenv
-  if [ ! -e rbenv/versions ]; then
+  if [ ! -e ${SCRIPT_DIR}/rbenv/versions ]; then
     run 'run' 'web' "cp -r /opt/base-rbenv/* /home/cdodev/.rbenv/."
   fi
 
@@ -425,7 +457,7 @@ fi
 
 if [[ "${command}" == "build" || "${command}" == "setup" ]]; then
   if [ ! -e rbenv/versions ]; then
-    echo "You need to install first. Run `cdo install`"
+    echo "You need to install first. Run \`cdo install\`"
     exit 1
   fi
 
@@ -441,8 +473,8 @@ else
 fi
 
 if [ "${command}" == "build:js" ]; then
-  if [ ! -e src/apps/node_modules/.bin/grunt ]; then
-    echo "You need to install first. Run `cdo install:js`"
+  if [ ! -e ${SCRIPT_DIR}/src/apps/node_modules/.bin/grunt ]; then
+    echo "You need to install first. Run \`cdo install:js\`"
     exit 1
   fi
 
@@ -473,9 +505,23 @@ else
 fi
 
 if [ "${command}" == "dcdo:reset" ]; then
-  # We just remove the temp json file
-  if [ -f "${SCRIPT_DIR}/src/dashboard/dcdo_development_temp.json" ]; then
-    rm "${SCRIPT_DIR}/src/dashboard/dcdo_development_temp.json"
+  if [ -z ${2} ]; then
+    echo "To reset all variables, specify --all"
+    echo
+    echo "Example: cdo dcdo:reset --all"
+    exit 1
+  fi
+
+  if [[ "${2}" == "--all" ]]; then
+    # We just remove the temp json file
+    if [ -f "${SCRIPT_DIR}/src/dashboard/dcdo_development_temp.json" ]; then
+      rm "${SCRIPT_DIR}/src/dashboard/dcdo_development_temp.json"
+    else
+      echo "Error: Could not find a variable cache at:"
+      echo "  ${SCRIPT_DIR}/src/dashboard/dcdo_development_temp.json"
+      echo
+      echo "Perhaps there are no variables currently set?"
+    fi
   fi
   exit 0
 else
@@ -619,18 +665,18 @@ else
   SERVICES[server]="Run the web server in the foreground. Use '-d' to run in background."
 fi
 
-if [ "${command}" == "s3:new" ]; then
+if [ "${command}" == "s3:create" ]; then
   if [ -z ${1} ]; then
     echo "Error: The name of the new bucket is required."
     echo
-    echo "Usage: cdo s3:new foo"
+    echo "Usage: cdo s3:create foo"
     exit 1
   fi
 
   run 'run' 'mc' "/bin/bash -ic 'mc alias set minio \${MINIO_SERVER_URL} \${MINIO_ROOT_USER} \${MINIO_ROOT_PASSWORD}'; mc mb minio/${1} --with-versioning"
   exit $?
 else
-  MAINTENANCE[s3:new]="Create a new bucket."
+  MAINTENANCE[s3:create]="Create a new bucket."
 fi
 
 if [ "${command}" == "s3:mkdir" ]; then
@@ -796,11 +842,25 @@ else
   TESTING[lint:styles:args]="file#The SCSS file to lint. (default: all)##[FILE:apps]"
 fi
 
-if [ "${command}" == "lint:precommit" ]; then
-  run 'run' 'web' '/bin/bash tools/hooks/pre-commit'
+if [ "${command}" == "hooks:pre-commit" ]; then
+  run 'run' '-T' 'web' 'tools/hooks/pre-commit'
   exit $?
 else
-  TESTING[lint:precommit]="Runs linters on files currently added to the next commit."
+  TESTING[hooks:pre-commit]="Runs linters on files currently added to the next commit."
+fi
+
+if [ "${command}" == "hooks:post-checkout" ]; then
+  run 'run' '-T' 'web' 'tools/hooks/post-checkout'
+  exit $?
+else
+  TESTING[hooks:post-checkout]="Runs checks on changed requirements caused by a checkout."
+fi
+
+if [ "${command}" == "hooks:post-merge" ]; then
+  run 'run' '-T' 'web' 'tools/hooks/post-merge'
+  exit $?
+else
+  TESTING[hooks:post-merge]="Runs checks on changed requirements caused by a merge."
 fi
 
 if [ "${command}" == "seed" ]; then
@@ -883,7 +943,7 @@ fi
 
 if [ "${command}" == "test:ui" ]; then
   ARGS="test:regular_ui"
-  if [ ! -z ${1} ]; then
+  if [ ! -z "${1}" ]; then
     ARGS="test:ui feature=./dashboard/test/ui/features/${@}"
   fi
   run 'run' 'ui-tests' "bundle exec rake ${ARGS}"
@@ -913,6 +973,110 @@ if [ "${command}" == "reset:test" ]; then
   exit $?
 else
   TESTING[reset:test]="Drop and recreate the test database (for unit tests.)"
+fi
+
+if [ "${command}" == "experiments:create" ]; then
+  parse_args "${@}"
+
+  if [ -z "${positional[0]}" ]; then
+    echo "Error: experiment name is required."
+    echo
+    echo "Example: cdo experiments:create ai-rubrics --unit csd3-2023 --section-of teacher"
+    echo " - This creates the 'ai-rubrics' experiment for the 'csd3-2023'"
+    echo "   course which is taught by the user named 'teacher'"
+    exit 1
+  fi
+  name=${positional[0]}
+
+  section="${optional[section]}"
+  sectionOf="${optional[section-of]}"
+  unit="${optional[unit]}"
+
+  createCode=
+  if [[ ! -z "${section}" || ! -z "${sectionOf}" ]]; then
+    echo "Creating SingleSectionExperiment..."
+
+    unitCode=
+    if [[ ! -z "${unit}" ]]; then
+      unitCode="unit_id = Unit.find_by_name(\"${unit}\").id;"
+    fi
+
+    sectionCode=
+    if [[ ! -z "${sectionOf}" ]]; then
+      # Get the section via the name of the teacher
+      userLookup="user = User.find_by_username(\"${sectionOf}\"); puts \"User '${sectionOf}' not found!\" or exit(1) unless user;"
+      sectionCode="${userLookup} section_id = user.sections&.first&.id; puts \"Section cannot be found for user '${sectionOf}'\" or exit(1) unless section_id;"
+      if [[ ! -z "${unitCode}" ]]; then
+        sectionCode="${userLookup} section_id = user.sections&.where(script_id: unit_id).first&.id; puts \"Section cannot be found for user '${sectionOf}'\" or exit(1) unless section_id;"
+      fi
+    elif [[ ! -z "${section}" ]]; then
+      sectionCode="section_id = '${section_id}'.to_i;"
+    fi
+
+    createCode="${unitCode} ${sectionCode} pp SingleSectionExperiment.create!(name: \"${name}\", section_id: section_id, script_id: unit_id);"
+  fi
+  
+  code="\$LOAD_PATH.unshift \"/app/src\"; require \"deployment\";"
+  code="${code} require \"dashboard/config/environment\";"
+  code="${code} ${createCode}"
+
+  echo
+  echo "Executing: '${code}'"
+  echo
+  run '-q' 'run' 'web' "ruby -e '${code}'"
+  exit $?
+fi
+
+if [ "${command}" == "user:make-admin" ]; then
+  if [ -z "${1}" ]; then
+    echo "Error: username of a section-less teacher account required."
+    exit 1
+  fi
+
+  run '-q' 'run' 'web' "ruby -e '\$LOAD_PATH.unshift \"/app/src\"; require \"deployment\"; require \"dashboard/config/environment\"; puts !!User.find_by_username(\"${1}\")&.update!(admin: true)'"
+  exit $?
+else
+  MAINTENANCE[user:make-admin]="Mark the given user as an admin."
+fi
+
+if [ "${command}" == "user:create" ]; then
+  parse_args "${@}"
+
+  age=
+  email=
+  password=
+  name=
+
+  if [ -z "${positional[0]}" ]; then
+    echo "Error: type of the new user required: student, teacher"
+    exit 1
+  fi
+  user_type=${positional[0]}
+
+  if [ -z "${positional[1]}" ]; then
+    echo "Error: username of the new user required."
+    exit 1
+  fi
+  username=${positional[1]}
+
+  name=${optional[name]:=${username}}
+  password=${optional[password]:=allstudents}
+  email=${optional[email]:=${username}@example.com}
+  age=${optional[age]:=18}
+
+  echo "Creating user..."
+  echo "- type: ${user_type}"
+  echo "- username: ${username}"
+  echo "- password: ${password}"
+  echo "- name: ${name}"
+  echo "- email: ${email}"
+  echo "- age: ${age}"
+  exit 1
+
+  run '-q' 'run' 'web' "ruby -e '\$LOAD_PATH.unshift \"/app/src\"; require \"deployment\"; require \"dashboard/config/environment\"; pp User.create!(username: \"${username}\", email: \"${email}\", age: \"${age}\", password: \"${password}\", name: \"${name}\", user_type: \"${user_type}\")'"
+  exit $?
+else
+  MAINTENANCE[user:create]="Create a new user."
 fi
 
 # Detect that we need help! (We entered an unknown command)

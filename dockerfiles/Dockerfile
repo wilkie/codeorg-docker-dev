@@ -16,7 +16,7 @@ RUN apt-get update \
     && apt-get -y install --no-install-recommends ca-certificates \
     && apt-get -y install --no-install-recommends \
     autoconf gcc g++ bison build-essential libssl-dev libyaml-dev libreadline-dev \
-    zlib1g-dev libncurses-dev libffi-dev git parallel debian-archive-keyring
+    zlib1g-dev libncurses-dev libffi-dev git git-lfs parallel debian-archive-keyring
 
 # Set the locale
 RUN apt-get -y install locales

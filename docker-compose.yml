@@ -94,6 +94,7 @@ services:
   # Runs the node interactive shell within the web environment
   node:
     extends: web
+    working_dir: /app/src/apps
     command: /bin/bash -ic 'node'
     profiles:
       - node

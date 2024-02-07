@@ -123,6 +123,29 @@ cdo test:js
 
 ## Development
 
+### Enabling Backend Experiments
+
+Experiments are triggered via the `DCDO` `experiment_value` system.
+Here, the `experiment_value` function looks for the tag to exist within the request itself or if it is set broadly as a `DCDO` variable.
+
+To set such a variable, just use `cdo dcdo:set`:
+
+```
+cdo dcdo:set gender 1
+```
+
+This enables the 'gender' experiment by giving it a truthy value.
+
+You can see what variables are set via the `dcdo:list` command which outputs a JSON dictionary with all set variables:
+
+```
+cdo dcdo:list
+
+{
+  "gender": 1
+}
+```
+
 ### Installing new gems
 
 When you edit the `Gemfile` within the repository directory (e.g. `./src/Gemfile`), run the `cdo install:gems` command.
