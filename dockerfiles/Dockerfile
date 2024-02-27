@@ -152,3 +152,13 @@ FROM cdo-web AS cdo-test
 
 RUN sudo apt update
 RUN sudo apt install -y libgl1-mesa-dev libosmesa6-dev libpci-dev firefox --no-install-recommends
+
+# AWS Access Environment
+# ----------------------
+
+FROM cdo-test AS cdo-aws-access
+
+RUN sudo apt update
+RUN sudo apt install xvfb x11vnc -y
+COPY bin/vnc-aws-access.sh /app/bin/vnc-aws-access.sh
+RUN sudo chmod +x /app/bin/vnc-aws-access.sh

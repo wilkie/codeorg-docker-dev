@@ -26,26 +26,29 @@ services:
       - minio
     working_dir: /app/src
     command: /bin/bash -i -c "./bin/dashboard-server"
-    networks:
-      - cdo_network
     profiles:
       - web
 
   # Runs the aws-access binary for code-dot-org engineers
   aws-access:
-    extends: web
     image: codedotorg/codedotorg-aws-access
     build:
-      dockerfile: ./dockerfiles/headless.Dockerfile
+      dockerfile: ./dockerfiles/Dockerfile
+      target: cdo-aws-access
       args:
         UID: ${FIXUID:-1000}
         GID: ${FIXGID:-1000}
-    ports:
-      # VNC port
-      - "5900:5900"
-    command: /bin/bash -i -c "cd /app; /bin/bash /app/bin/vnc-aws-access.sh"
-    profiles:
-      - aws-access
+    environment:
+      DISPLAY: ${DISPLAY}
+    volumes:
+      - ./src:/app/src
+      - ./rbenv:/home/cdodev/.rbenv
+      - ./aws:/home/cdodev/.aws
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ~/.Xauthority:/home/cdodev/.Xauthority
+    working_dir: /app
+    command: /bin/bash -i -c "/bin/bash /app/bin/vnc-aws-access.sh"
+    network_mode: host
 
   # Runs the development environment dashboard web server
   server:
