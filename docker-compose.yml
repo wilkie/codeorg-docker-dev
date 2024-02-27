@@ -19,7 +19,7 @@ services:
       - ./src:/app/src
       - ./rbenv:/home/cdodev/.rbenv
       - ./nvm:/home/cdodev/.nvm
-      - $HOME/.aws-docker:/home/cdodev/.aws
+      - ./aws:/home/cdodev/.aws
     tty: true
     depends_on:
       - db
@@ -176,6 +176,33 @@ services:
       - test
     networks:
       - cdo_network_test
+
+  # This runs the JavaScript build server
+  storybook-server:
+    extends: web
+    working_dir: /app/src/apps
+    command: /bin/bash -ic 'yarn storybook'
+    depends_on:
+      test:
+        condition: service_healthy
+    ports:
+      - "9001:9001"
+    healthcheck:
+      test: "curl --fail --head http://localhost:9001"
+      interval: 2s
+      retries: 100
+      start_period: 30s
+      timeout: 10s
+    profiles:
+      - test
+    networks:
+      - cdo_network_test
+
+  # This runs the JavaScript build server
+  js-server:
+    extends: web
+    working_dir: /app/src/apps
+    command: /bin/bash -ic 'yarn start'
 
   # This runs a JavaScript unit test
   js-tests:

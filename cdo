@@ -456,7 +456,7 @@ else
 fi
 
 if [[ "${command}" == "build" || "${command}" == "setup" ]]; then
-  if [ ! -e rbenv/versions ]; then
+  if [ ! -e ${SCRIPT_DIR}/rbenv/versions ]; then
     echo "You need to install first. Run \`cdo install\`"
     exit 1
   fi
@@ -605,16 +605,9 @@ else
   GENERAL[shell]="Drop into an interactive shell in the web server machine."
 fi
 
-if [ "${command}" == "server" ]; then
+if [ "${command}" == "server:web" ]; then
   run 'stop' 'server'
-  if [ "${1}" == "-f" ]; then
-    echo "Running server in the foreground"
-    echo
-    echo "When it is ready, you can view it at:"
-    echo "http://localhost-studio.code.org:3000"
-    echo
-    run 'run' '-i --service-ports' 'server'
-  else
+  if [ "${1}" == "-d" ]; then
     echo "Running server in the background..."
     echo
     echo "When it is ready, you can view it at:"
@@ -659,10 +652,105 @@ if [ "${command}" == "server" ]; then
 
     # Terminate the logs subprocess
     kill -SIGKILL -${LOG_PID} > /dev/null 2> /dev/null
+  else
+    echo "Running server in the foreground"
+    echo
+    echo "When it is ready, you can view it at:"
+    echo "http://localhost-studio.code.org:3000"
+    echo
+    run 'run' '-i --service-ports' 'server'
   fi
   exit $?
 else
   SERVICES[server]="Run the web server in the foreground. Use '-d' to run in background."
+fi
+
+if [ "${command}" == "server" ]; then
+  run 'stop' 'server'
+  if [ "${1}" == "-d" ]; then
+    echo "Running server in the background..."
+    echo
+    echo "When it is ready, you can view it at:"
+    echo "http://localhost-studio.code.org:3000"
+    echo
+    set -m
+    run 'up' '-d' 'server'
+    docker compose logs server -f --since 0s &
+    LOG_PID=$!
+    set +e
+    wait_until_healthy()
+    {
+      while sleep 0.5; do
+        docker compose ps | grep -e 'dashboard-server' > /dev/null
+        if [ ${?} != 0 ]; then
+          echo "Web service stopped unexpectedly."
+          break
+        fi
+
+        docker compose ps | grep -e 'dashboard-server.\+healthy' > /dev/null
+        if [ ${?} == 0 ]; then
+          echo "Web service started."
+          echo
+          echo "You can view it at:"
+          echo "http://localhost-studio.code.org:3000"
+          break
+        fi
+      done
+      set -e
+
+      # Stop the logs process
+      kill -SIGTSTP ${LOG_PID} > /dev/null 2> /dev/null
+    }
+
+    wait_until_healthy &
+    # Foreground the logs subprocess
+    fg %1
+
+    # Remove it from our interactive terminal
+    # (it warns us about disowning a stopped process... so we dump that warning)
+    disown %1 > /dev/null 2> /dev/null
+
+    # Terminate the logs subprocess
+    kill -SIGKILL -${LOG_PID} > /dev/null 2> /dev/null
+  else
+    echo "Running server in the foreground"
+    echo
+    echo "When it is ready, you can view it at:"
+    echo "http://localhost-studio.code.org:3000"
+    echo
+    run 'run' '-i --service-ports' 'server'
+  fi
+  exit $?
+else
+  SERVICES[server]="Run the web server in the foreground. Use '-d' to run in background."
+fi
+
+if [ "${command}" == "server:js" ]; then
+  run 'stop' 'js-server'
+  if [ "${1}" == "-d" ]; then
+    echo "Running JS build server in the background..."
+    run 'up' '-d' 'js-server'
+  else
+    echo "Running JS build server in the foreground"
+    run 'run' '-i --service-ports' 'js-server'
+  fi
+  exit $?
+else
+  SERVICES[server:js]="Run the JS build server in the foreground. Use '-d' to run in background."
+fi
+
+if [ "${command}" == "server:storybook" ]; then
+  run 'stop' 'js-server'
+  if [ "${1}" == "-d" ]; then
+    echo "Running Storybook server in the background..."
+    run 'up' '-d' 'storybook-server'
+  else
+    echo "Running Storybook server in the foreground"
+    run 'run' '-i --service-ports' 'storybook-server'
+  fi
+  exit $?
+else
+  SERVICES[server:js]="Run the JS build server in the foreground. Use '-d' to run in background."
 fi
 
 if [ "${command}" == "s3:create" ]; then
@@ -737,6 +825,13 @@ if [ "${command}" == "s3:cat" ]; then
   exit $?
 else
   MAINTENANCE[s3:cat]="View the file contents of a file within a local S3 (minio) bucket."
+fi
+
+if [ "${command}" == "ruby" ]; then
+  run 'run' 'web' "/bin/bash -ic 'ruby ${@}'"
+  exit $?
+else
+  INTERACTIVE[console]="Runs a ruby script on the web environment."
 fi
 
 if [ "${command}" == "console" ]; then
@@ -1071,7 +1166,6 @@ if [ "${command}" == "user:create" ]; then
   echo "- name: ${name}"
   echo "- email: ${email}"
   echo "- age: ${age}"
-  exit 1
 
   run '-q' 'run' 'web' "ruby -e '\$LOAD_PATH.unshift \"/app/src\"; require \"deployment\"; require \"dashboard/config/environment\"; pp User.create!(username: \"${username}\", email: \"${email}\", age: \"${age}\", password: \"${password}\", name: \"${name}\", user_type: \"${user_type}\")'"
   exit $?

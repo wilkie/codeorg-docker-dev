@@ -3,6 +3,7 @@
 /rbenv/
 /nvm/
 /javabuilder/
+/aws/
 .idea
 /.minio1-storage/
 /.minio2-storage/
