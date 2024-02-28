@@ -1,4 +1,5 @@
 # Code<span>.org Docker Dev Environment
+
 The Code<span>.org Docker dev environment enables you to develop on the Code<span>.org platform using Docker containers.
 
 Doing so offers many advantages over a development environment directly on your laptop. These include:
@@ -27,7 +28,9 @@ Docker networking provides a connection between the two containers. Much of this
 
 The only pre-requisite you need on your host laptop is Docker desktop.  If you don't have it already installed and running, you can download it [here](https://www.docker.com/products/docker-desktop/). 
 
-If you are on a Linux machine, you can follow the instructions [here](https://docs.docker.com/desktop/install/linux-install/). Also, ensure you can run Docker as a non-root user, following [these instructions](https://docs.docker.com/engine/install/linux-postinstall/).
+If you are on a Linux machine, you can follow the instructions [here](https://docs.docker.com/desktop/install/linux-install/).
+
+Also, ensure you can run Docker as a non-root user, following [these instructions](https://docs.docker.com/engine/install/linux-postinstall/).
 
 You will need to ensure that `docker compose` is usable in your install.
 Occasionally the `compose` features are installed separately.
@@ -75,7 +78,7 @@ Run the setup command to build the containers and install the libraries.
 cdo setup
 ```
 
-## Optional Step: Configure AWS credentials
+## Optional: Configure AWS credentials (Code.org Engineers/Contributers Only)
 
 For code.org developers, special access and logging is done via their AWS credentials.
 
@@ -83,16 +86,12 @@ You do not need AWS access to contribute to the codebase. By default, the instal
 will write a configuration that assumes you do not have any access. However, you may
 go through the process of generating your credentials anyway.
 
-- Ensure $HOME/.aws-docker on your host laptop contains valid AWS credentials. You probably already have this setup, but if you don't, you can find instructions [here](https://docs.google.com/document/d/1dDfEOhyyNYI2zIv4LI--ErJj6OVEJopFLqPxcI0RXOA/edit#heading=h.nbv3dv2smmks).
-- Connect to the web container:
-	- ```docker exec -ti web bash```
-- Run the aws_access script:
-	- ```cd /app/src```
-	- ```bin/aws_access```
-	- When prompted, copy and paste the URL into a separate browser window and copy the returned OAUTH_CODE to the clipboard.
-- Set the OAUTH_CODE as an environment var:
-	- ```export OAUTH_CODE=copied value```
-	- (If you close the terminal window or restart the containers, you'll need to repeat this)
+- Refer to these instructions [here](https://docs.google.com/document/d/1dDfEOhyyNYI2zIv4LI--ErJj6OVEJopFLqPxcI0RXOA/edit#heading=h.nbv3dv2smmks).
+- Place the `config` file for the container in the file `aws/config`
+- Generate an authentication token using `cdo aws:authenticate`
+- A Firefox window should pop up (or you are instructed to point a VNC client to a port)
+- Confirm your google authentication.
+- Confirm the script tells you your ARN.
 
 ## Step 3: Running tests
 
@@ -233,6 +232,8 @@ To disable git info in the prompt (and speed up the terminal), run the following
 ### Q: If I delete the containers, does it delete any data?
 
 No, all data resides on the host laptop and is mounted by the containers when they start. Source is kept in the ./src folder. MySQL database files are kept in the ./.mysql-data folder. MinIO (S3) data is kept in the `./minio...` paths. The installed ruby gems are in `./rbenv` and a copy of the installed nvm packages are in `./nvm`.
+
+You can have it reset some of this data using the various `cdo reset` commands.
 
 ### Q: Does my IDE run in a container?
 
