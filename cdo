@@ -294,6 +294,11 @@ if [[ "${command}" == "install:src" || "${command}" == "install" || "${command}"
   fi
 fi
 
+if [[ "${command}" == "aws:authenticate" ]]; then
+  run 'run' 'aws-access'
+  exit $?
+fi
+
 if [[ "${command}" == "build:docker" || "${command}" == "setup" ]]; then
   if [ ! -z ${1} ]; then
     set +e

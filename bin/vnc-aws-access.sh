@@ -1,7 +1,21 @@
 cd /app
 
-echo "Hi"
+echo "Starting ./bin/vnc-aws-access.sh"
+echo
+echo "Here is the contents of your .aws path:"
 ls ~/.aws
+echo
+
+echo "Using AWS_PROFILE: ${AWS_PROFILE}"
+echo
+
+if [ ! -e ~/.aws/config ]; then
+  echo "Error: You do not have a config file in your ./aws directory."
+  echo "Please consult the AWS documentation in the doc entitled \"AWS Account Access\""
+  echo "for the contents of the config data and write it to aws/config before running"
+  echo "this again."
+  exit 1
+fi
 
 # We might run a VNC server to give a means of interacting with Firefox inside
 # the container.
