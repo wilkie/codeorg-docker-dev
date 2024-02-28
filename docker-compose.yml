@@ -241,6 +241,7 @@ services:
       - ./.mysql-data:/var/lib/mysql
     profiles:
       - web
+      - test
     networks:
       - cdo_network
       - cdo_network_test
@@ -262,6 +263,7 @@ services:
     command: /bin/bash -ic 'mysql db --password=password --user=root --host=db'
     profiles:
       - web
+      - test
     networks:
       - cdo_network
 
@@ -328,6 +330,7 @@ services:
     command: server --console-address ":3001" /data1 /data2 /data3 /data4
     profiles:
       - web
+      - test
     networks:
       - cdo_network
 
