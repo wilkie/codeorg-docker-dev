@@ -113,13 +113,20 @@ services:
   test:
     container_name: test-web
     hostname: test-web
-    extends: web
+    image: codedotorg/codedotorg-test
     build:
       dockerfile: ./dockerfiles/Dockerfile
       target: cdo-test
       args:
         UID: ${FIXUID:-1000}
         GID: ${FIXGID:-1000}
+    volumes:
+      - ./src:/app/src
+      - ./rbenv:/home/cdodev/.rbenv
+      - ./nvm:/home/cdodev/.nvm
+    depends_on:
+      - db
+      - minio
     expose:
       - "3000"
     environment:
@@ -127,6 +134,7 @@ services:
       SELENIUM_HOST: selenium
       SELENIUM_URL: 'http://selenium:4444/wd/hub'
       RAILS_ENV: test
+    working_dir: /app/src
     command: /bin/bash -i -c "./bin/dashboard-server"
     healthcheck:
       test: "curl --fail --head http://localhost:3000/assets/css/code-studio.css"
