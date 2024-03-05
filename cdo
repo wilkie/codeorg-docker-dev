@@ -755,7 +755,7 @@ if [ "${command}" == "server:storybook" ]; then
   fi
   exit $?
 else
-  SERVICES[server:js]="Run the JS build server in the foreground. Use '-d' to run in background."
+  SERVICES[server:storybook]="Run the JS Storybook server in the foreground. Use '-d' to run in background."
 fi
 
 if [ "${command}" == "s3:create" ]; then
@@ -917,10 +917,11 @@ fi
 if [ "${command}" == "lint:scss" ]; then
   ARGS=''
   if [ ! -z "$1" ]; then
-    # Get the path relative to the ./pegasus/test path in the container itself
+    # Get the path relative to the repo path in the container itself
     ARGS=" ./dashboard/app/assets/stylesheets/${1}"
+    shift
   fi
-  COMMAND="bundle exec scss-lint${ARGS}"
+  COMMAND="bundle exec scss-lint${ARGS} ${@}"
   run 'run' 'web' "${COMMAND}"
   exit $?
 else
@@ -931,10 +932,11 @@ fi
 if [ "${command}" == "lint:styles" ]; then
   ARGS=''
   if [ ! -z "$1" ]; then
-    # Get the path relative to the ./pegasus/test path in the container itself
+    # Get the path relative to the ./apps path in the container itself
     ARGS=" ${1}"
+    shift
   fi
-  COMMAND="cd apps; ./node_modules/.bin/stylelint --config stylelint.config.js${ARGS}"
+  COMMAND="cd apps; ./node_modules/.bin/stylelint --config stylelint.config.js${ARGS} ${@}"
   run 'run' 'web' "${COMMAND}"
   exit $?
 else

@@ -95,32 +95,95 @@ go through the process of generating your credentials anyway.
 
 ## Step 3: Running tests
 
-To run pegasus tests:
+To run pegasus tests (Optionally, supply a file from the pegasus/test directory):
 
 ```
 cdo test:pegasus
-cdo test:pegasus test_forms.rb # Optionally, supply a file within pegasus/test
+cdo test:pegasus test_forms.rb
 ```
 
-To run dashboard unit tests:
+To run dashboard unit tests (Optionally, supply a file from the dashboard/test directory):
 
 ```
 cdo test:unit
+cdo test:unit models/lessons_standard_test.rb
 ```
 
-To run dashboard UI tests:
+To run dashboard UI tests (Optionally, supply a file from the dashboard/test/ui directory):
 
 ```
 cdo test:ui
+cdo test:ui foundations/header.feature
 ```
 
-To run JavaScript unit tests:
+To run JavaScript unit tests (Optionally, supply a file from the apps/test directory):
 
 ```
 cdo test:js
+cdo test:js unit/templates/rubrics/LearningGoalTest.jsx
 ```
 
 ## Development
+
+### Committing / Linting
+
+The best practice for committing is to ensure that the linting hooks run. To do that, add files to stage the commit and then do `git commit -v` to commit the staged content (and `-v` to see the content that you are actually committing so you write a good commit message).
+
+The hooks will perform all the linting passes for all the files currently modified in the index.
+
+To run the lint process manually, you can use the various `cdo lint` commands.
+
+Let's say the `git commit` failed due to a React component failing a lint check:
+
+```
+/app/src/apps/src/templates/rubrics/RubricContainer.jsx
+  65:6  error  React Hook useEffect has a missing dependency: 'getTeacherFeedback'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+```
+
+Ok, let's run that lint pass which should reproduce that error:
+
+```
+cdo lint:js src/templates/rubrics/RubricContainer.jsx
+```
+
+We can attempt to have it automatically fix any style conventions using the `--fix` argument:
+
+```
+cdo lint:js src/templates/rubrics/RubricContainer.jsx --fix
+```
+
+For errors in stylesheets found within React component sources:
+
+```
+src/templates/rubrics/rubrics.module.scss
+ 114:14  ✖  Expected quotes around "checkbox"  selector-attribute-quotes
+```
+
+We can do a similar set of things, including using the `--fix` argument:
+
+```
+cdo lint:styles src/templates/rubrics/rubrics.module.scss --fix
+```
+
+When the linting pass succeeds, you can then commit the change.
+
+### Maintenance
+
+When you check out new changes, you can run the blanket `install` command to perform any necessary migrations and library installs:
+
+```
+cdo install
+```
+
+That's usually all one needs to do, but you can follow that with a full build as well to be sure:
+
+```
+cdo build
+```
+
+### Installing new gems
+
+When you edit the `Gemfile` within the repository directory (e.g. `./src/Gemfile`), run the `cdo install:gems` command.
 
 ### Enabling Backend Experiments
 
@@ -145,10 +208,6 @@ cdo dcdo:list
 }
 ```
 
-### Installing new gems
-
-When you edit the `Gemfile` within the repository directory (e.g. `./src/Gemfile`), run the `cdo install:gems` command.
-
 ## Optional: Run/Debug Dashboard and Pegasus (RubyMine)
 
 To setup the remote Ruby SDK:
@@ -169,7 +228,7 @@ To create a new run/debug configuration:
 
 - Create a new Rails run/debug configuration (or edit the current one if auto-created).
 - In the rails configuration, make sure the "Thin" server is selected".
-- Add the environment variable, "AWS_PROFILE=cdo"
+- **Optional**: If you have AWS access, add the environment variable, `AWS_PROFILE=cdo`
 - Select "Use other SDK" and select the Remote SDK from the container.
 - Select docker-compose exec as the attach method (RubyMine will attach to the running container instead of creating a new one)
 - Click on Run or Debug to start Dashboard. Browse to http://localhost:3000. Any breakpoints hit will drop back to the IDE.
@@ -177,15 +236,14 @@ To create a new run/debug configuration:
 To run the rails console from within RubyMine:
 
 - Select Run Rails Console...
-- If the console fails, edit the newly created rails console configuration and add the "AWS_PROFILE=cdo" environment var.
+- If the console fails, edit the newly created rails console configuration and, if you have AWS access, add the `AWS_PROFILE=cdo` environment var.
 
 ## Optional: Run/Debug Dashboard and Pegasus (VS Code)
 
-- Start containers, if they are not running, using `docker compose up`
+- Start containers, if they are not running, using `cdo server` or manually using `docker compose up`
 - Ensure the [Docker extension](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-docker) is installed.
 - Click on the Docker icon in the sidebar and locate the "Containers" panel.
 - Right click on the "codeorg-docker-dev-web" container and select "Attach Visual Studio Code". This will open a new VS Code Window, attached to the docker container.
-- Open a terminal and follow step 2 above (to ensure you have a valid OAUTH_CODE set).
 - If it is not already installed, add the [Ruby language extension](https://marketplace.visualstudio.com/items?itemName=rebornix.Ruby) to the remote VS Code instance.
 - Create a new run/launch configuration using the following: 
 
@@ -197,7 +255,7 @@ To run the rails console from within RubyMine:
       "name": "Debug Dashboard",
       "type": "Ruby",
       "request": "launch",
-      "program": "/home/cdodev/.rbenv/versions/2.6.6/bin/bundle",
+      "program": "/home/cdodev/.rbenv/versions/3.0.5/bin/bundle",
       "args": ["exec", "thin", "start", "-a", "0.0.0.0", "-p", "3000"],
       "useBundler": true,
       "showDebuggerOutput": true,
@@ -206,6 +264,7 @@ To run the rails console from within RubyMine:
   ]
 }
 ```
+
 - Click on the run "Debug Dashboard" button (or press F5) to start debugging.
 - Set breakpoints in your code and browse to http://localhost:3000.
 

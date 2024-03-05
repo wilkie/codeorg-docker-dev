@@ -20,7 +20,7 @@ fi
 # We might run a VNC server to give a means of interacting with Firefox inside
 # the container.
 XVFB_PID=
-if [[ -z ${DISPLAY} ]]; then
+if [[ -z ${DISPLAY} || ${DISPLAY} == '-' ]]; then
     export DISPLAY=:0
     Xvfb -screen :0 1024x768x16 2> /dev/null > /dev/null &
     XVFB_PID=$!

@@ -28,6 +28,9 @@ services:
     command: /bin/bash -i -c "./bin/dashboard-server"
     profiles:
       - web
+    networks:
+      - cdo_network
+      - cdo_network_test
 
   # Runs the aws-access binary for code-dot-org engineers
   aws-access:
@@ -39,7 +42,7 @@ services:
         UID: ${FIXUID:-1000}
         GID: ${FIXGID:-1000}
     environment:
-      DISPLAY: ${DISPLAY}
+      DISPLAY: ${DISPLAY:-}
     volumes:
       - ./src:/app/src
       - ./rbenv:/home/cdodev/.rbenv
@@ -57,6 +60,9 @@ services:
     ports:
       # Web server port
       - "3000:3000"
+    depends_on:
+      - db
+      - minio
     healthcheck:
       test: "curl --fail --head http://localhost:3000/assets/css/code-studio.css"
       interval: 2s
@@ -64,6 +70,7 @@ services:
       start_period: 30s
       timeout: 10s
     profiles:
+      - web
       - test
 
   # Runs a normal bash shell within the development web environment
@@ -133,11 +140,11 @@ services:
       # Ensure the local selenium is used
       SELENIUM_HOST: selenium
       SELENIUM_URL: 'http://selenium:4444/wd/hub'
-      RAILS_ENV: test
+    tty: true
     working_dir: /app/src
     command: /bin/bash -i -c "./bin/dashboard-server"
     healthcheck:
-      test: "curl --fail --head http://localhost:3000/assets/css/code-studio.css"
+      test: "curl --fail --head http://localhost:3000/"
       interval: 2s
       retries: 100
       start_period: 30s
@@ -333,6 +340,7 @@ services:
       - test
     networks:
       - cdo_network
+      - cdo_network_test
 
   # Minio Client (mc)
   mc:
