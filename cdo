@@ -1022,6 +1022,13 @@ else
   TESTING[test:js:args]="file#The JavaScript test file to run. (default: all)#unit/templates/BaseDialogTest.jsx#[FILE:apps/test]"
 fi
 
+if [ "${command}" == "test:storybook" ]; then
+  run 'run' 'js-tests' "yarn test:storybook --browser=FirefoxHeadless${ARGS}"
+  exit $?
+else
+  TESTING[test:storybook]="Run the JavaScript storybook tests."
+fi
+
 if [ "${command}" == "test:unit" ]; then
   ARGS=''
   if [ ! -z "$1" ]; then
