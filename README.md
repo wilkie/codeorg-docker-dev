@@ -78,6 +78,14 @@ Run the setup command to build the containers and install the libraries.
 cdo setup
 ```
 
+You should just be able to run the server right then and there:
+
+```
+cdo server
+```
+
+And follow the instructions to open the browser to the running instance.
+
 ## Optional: Configure AWS credentials (Code.org Engineers/Contributers Only)
 
 For code.org developers, special access and logging is done via their AWS credentials.
