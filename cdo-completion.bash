@@ -10,10 +10,12 @@ _commands()
   local cur prev words
   _get_comp_words_by_ref -n : cur prev words
 
+  INDEX=$((${#words[@]} - 3))
+
   # Get command help if there is a full command
   if [[ ! -z ${words[1]} && ${cur} != ${words[1]} ]]; then
     ARGUMENTS=($(cdo help "${words[1]}" | grep -ohe '^\s\s\S\+'))
-    ARGUMENT=${ARGUMENTS[0]}
+    ARGUMENT=${ARGUMENTS[INDEX]}
 
     # Get rid of 'optional' markings ('[...]')
     ARGUMENT=${ARGUMENT//[\[\]]/}
@@ -58,6 +60,18 @@ _commands()
         compopt -o default
         COMPREPLY=()
       fi
+    elif [[ ${ARGUMENT} == STRING* ]]; then
+      # We allow any string as an argument; just turn off completion
+      compopt -o default
+      COMPREPLY=()
+    elif [[ ${ARGUMENT} == INT* ]]; then
+      # We allow any integer as an argument; just turn off completion
+      compopt -o default
+      COMPREPLY=()
+    elif [[ ${ARGUMENT} != "" ]]; then
+      # Some list of things delimited by '|'
+      COMPREPLY=( $(compgen -W "${ARGUMENT//|/ }" ${cur}) )
+      __ltrim_colon_completions "$cur"
     fi
   else
     COMPREPLY=( $(compgen -W "${COMMANDS}" ${cur}) )

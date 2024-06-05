@@ -19,10 +19,11 @@ local -a subcmds
 subcmds=("${(f)COMMANDS}")
 
 local cur=${words[-1]}
+local index=$((${#words[@]} - 2))
 
 if [[ ! -z ${words[2]} && ${cur} != ${words[2]} ]]; then
   local ARGUMENTS=($(cdo help "${words[2]}" | grep -ohe '^\s\s\S\+'))
-  local ARGUMENT=${ARGUMENTS[1]}
+  local ARGUMENT=${ARGUMENTS[${index}]}
 
   # Get rid of 'optional' markings ('[...]')
   ARGUMENT=${ARGUMENT//[\[\]]/}
@@ -32,12 +33,22 @@ if [[ ! -z ${words[2]} && ${cur} != ${words[2]} ]]; then
   elif [[ ${ARGUMENT} == FILE* ]]; then
     # Get any hint to the directory
     local PARTS=("${(@s[:])ARGUMENT}")
-    #echo "parts: ${PARTS}"
 
     ARGUMENT=${PARTS[1]}
     SEARCH_PATH=${PARTS[2]}
 
     _files -W ${CDO_PATH}/${SEARCH_PATH}
+  elif [[ ${ARGUMENT} == STRING* ]]; then
+    # String type... no completion
+    cur=${cur}
+  elif [[ ${ARGUMENT} == INT* ]]; then
+    # Integer... only digits
+    cur=${cur}
+  else
+    # The listing is delimited by '|'
+    local -a enumcmds
+    enumcmds=("${(@s[|])ARGUMENT}")
+    _describe 'command' enumcmds
   fi
 else
   # The initial command listing

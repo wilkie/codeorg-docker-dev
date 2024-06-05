@@ -42,7 +42,8 @@ RUN sudo -E apt-get -y install --no-install-recommends libmagickwand-dev imagema
 # MySQL Dependencies
 RUN sudo -E apt-get -y install --no-install-recommends cmake wget libaio-dev
 
-# Build and Install MySQL Native Client
+# Install MySQL Native Client
+RUN sudo -E apt-get -y install --no-install-recommends mysql-client-8.0 libmysqlclient-dev
 RUN cd /home/${USERNAME} \
     && wget https://downloads.mysql.com/archives/get/p/23/file/mysql-${MYSQL_VERSION}.tar.gz \
     && tar xvf mysql-${MYSQL_VERSION}.tar.gz

@@ -40,13 +40,14 @@ declare -A TESTING
 
 # Add help command
 GENERAL[help]="Displays information about commands."
-GENERAL[help:args]="[COMMAND]"
+GENERAL[help:args]="command#The name of the command to query#user:create#[COMMAND]"
 
 usage()
 {
   SUB_CMD_NAME=$1
   : ${SUB_CMD_NAME:='<command>'}
-  ARGS=$2
+  shift
+  ARGS=$@
   : ${ARGS:='[<...args>]'}
   echo "Usage: ${CMD_NAME} ${SUB_CMD_NAME} ${ARGS}"
 
@@ -392,7 +393,7 @@ if [[ "${command}" == "install:js" || "${command}" == "install" || "${command}" 
   fi
 
   # Yarn install
-  run 'run' 'web' 'cd apps; yarn install; yarn add karma-firefox-launcher@^2.1.2'
+  run 'run' 'web' 'cd apps; yarn install; yarn add karma-firefox-launcher@^2.1.2; yarn add karma-selenium-launcher@^1.0.1'
 
   # Stop if this is all that was asked of us
   if [ "${command}" == "install:js" ]; then
@@ -854,10 +855,17 @@ else
 fi
 
 if [ "${command}" == "migrate" ]; then
-  run 'run' 'migrate'
+  run 'run' 'web' "/bin/bash -ic 'cd dashboard; bundle exec rake db:migrate && cd ../pegasus && bundle exec rake db:migrate'"
   exit $?
 else
   MAINTENANCE[migrate]="Run all pending database migrations."
+fi
+
+if [ "${command}" == "migrate:test" ]; then
+  run 'run' 'web' 'cd dashboard; RAILS_ENV=test UTF8=1 bundle exec rake db:reset db:test:prepare'
+  exit $?
+else
+  MAINTENANCE[migrate]="Run all pending database migrations on the test database."
 fi
 
 if [ "${command}" == "irb" ]; then
@@ -879,8 +887,9 @@ if [ "${command}" == "lint:ruby" ]; then
   if [ ! -z "$1" ]; then
     # Get the path relative to the repo
     ARGS=" ${1}"
+    shift
   fi
-  ${COMPOSE_CMD} ${RUN_CMD} web /bin/bash -ic "bundle exec rubocop${ARGS}"
+  ${COMPOSE_CMD} ${RUN_CMD} web /bin/bash -ic "bundle exec rubocop${ARGS} ${@}"
   exit $?
 else
   TESTING[lint:ruby]="Runs the ruby 'rubocop' linter."
@@ -1008,14 +1017,17 @@ if [ "${command}" == "test:js" ]; then
   if [ ! -z "$1" ]; then
     # Check that the file exists
     if [ ! -f ${SCRIPT_DIR}/src/apps/test/${1} ]; then
-      echo "Error: Test not found in: ${SCRIPT_DIR}/src/apps/test/${1}"
-      exit 1
+      #echo "Error: Test not found in: ${SCRIPT_DIR}/src/apps/test/${1}"
+      #exit 1
+      echo
     fi
 
     # Get the path relative to the ./apps path in the container itself
     ARGS=" --entry=./test/${1}"
   fi
+  #run 'run' 'js-tests' "yarn test:unit${ARGS}"
   run 'run' 'js-tests' "yarn test:unit --browser=FirefoxHeadless${ARGS}"
+  #run 'run' 'js-tests' "yarn test:unit --browser=SeleniumBrowser${ARGS}"
   exit $?
 else
   TESTING[test:js]="Run the JavaScript unit tests."
@@ -1051,11 +1063,15 @@ else
 fi
 
 if [ "${command}" == "test:ui" ]; then
-  ARGS="test:regular_ui"
+  ARGS="test:ui"
   if [ ! -z "${1}" ]; then
-    ARGS="test:ui feature=./dashboard/test/ui/features/${@}"
+    FEATURES=
+    for feature in "$@"; do
+      FEATURES="${FEATURES},./dashboard/test/ui/features/${feature}"
+    done
+    ARGS="test:ui feature=${FEATURES:1}"
   fi
-  run 'run' 'ui-tests' "bundle exec rake ${ARGS}"
+  run 'run' 'ui-tests' "bundle exec rake ${ARGS} |& tee last-ui-test.log"
   exit $?
 else
   TESTING[test:ui]="Run the UI (features) tests."
@@ -1185,6 +1201,7 @@ if [ "${command}" == "user:create" ]; then
   exit $?
 else
   MAINTENANCE[user:create]="Create a new user."
+  MAINTENANCE[user:create:args]="type#The type of user.#student#student|teacher;username#The username for the user.#wilkie#STRING;--name#The display name of the user.#wilkie#STRING;--email#The email for the user.#wilkie@example.com#STRING;--password#The password for the user. (default: allstudents)#allstudents#STRING;--age#The age of the user. (default: 18)#18#INT"
 fi
 
 # Detect that we need help! (We entered an unknown command)
@@ -1216,17 +1233,19 @@ if [ ! -z $1 ]; then
 
       if [ ! -z "${ARGS}" ]; then
         # Parse ARGS into a set of arguments
+        echo ${ARGS}
         IFS=$';' ARGLIST=(${ARGS})
         unset IFS
 
         # Parse out the usage item for the argument ('[FILE] [-d FLAG]', etc)
         MAX_ARG_LENGTH=1
         ARGS=''
-        for argitem in "${ARGLIST}"; do
+        for argitem in "${ARGLIST[@]}"; do
           IFS=$'#' ARGITEM=(${argitem})
           unset IFS
+          name=${ARGITEM[0]}
           type=${ARGITEM[-1]}
-          ARGS="${ARGS} ${type}"
+          ARGS="${ARGS} ${name}:${type}"
           MAX_ARG_LENGTH=$(( $MAX_ARG_LENGTH > ${#type} ? ${MAX_ARG_LENGTH} : ${#type} ))
         done
 
@@ -1237,7 +1256,7 @@ if [ ! -z $1 ]; then
 
         echo
         echo "Arguments:"
-        for argitem in "${ARGLIST}"; do
+        for argitem in "${ARGLIST[@]}"; do
           IFS=$'#' ARGITEM=(${argitem})
           name=${ARGITEM[0]}
           type=${ARGITEM[-1]}
